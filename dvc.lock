@@ -1,0 +1,78 @@
+schema: '2.0'
+stages:
+  download:
+    cmd: uv run python -m src.data.load
+    deps:
+    - path: src/data/load.py
+      hash: md5
+      md5: dc469f48a7db0dfe49e95b37581c3c9d
+      size: 1993
+    outs:
+    - path: data/raw/medical_tc_labels.csv
+      hash: md5
+      md5: 77e5f74d409bcc8b08495c2b743fc7fc
+      size: 157
+    - path: data/raw/medical_tc_test.csv
+      hash: md5
+      md5: 98978fd21c156efe960d901451161817
+      size: 3586836
+    - path: data/raw/medical_tc_train.csv
+      hash: md5
+      md5: 792daf8b6ca8557f88ba68f7cec22b03
+      size: 14254503
+  preprocess:
+    cmd: uv run python -m src.data.prepare
+    deps:
+    - path: data/raw/medical_tc_labels.csv
+      hash: md5
+      md5: 77e5f74d409bcc8b08495c2b743fc7fc
+      size: 157
+    - path: data/raw/medical_tc_test.csv
+      hash: md5
+      md5: 98978fd21c156efe960d901451161817
+      size: 3586836
+    - path: data/raw/medical_tc_train.csv
+      hash: md5
+      md5: 792daf8b6ca8557f88ba68f7cec22b03
+      size: 14254503
+    - path: src/data/dedupe.py
+      hash: md5
+      md5: 49c517be0115e5785ac3f13681dc39a1
+      size: 1854
+    - path: src/data/labels.py
+      hash: md5
+      md5: a0cac025678bb2a85fd16201a15a9f29
+      size: 1405
+    - path: src/data/load.py
+      hash: md5
+      md5: dc469f48a7db0dfe49e95b37581c3c9d
+      size: 1993
+    - path: src/data/prepare.py
+      hash: md5
+      md5: c2a67dd9564f1898cb205db1e1336b97
+      size: 864
+    outs:
+    - path: data/processed/deduped.csv
+      hash: md5
+      md5: 10b11e4bd1162e8534383009d702fa1a
+      size: 14275765
+  split:
+    cmd: uv run python -m src.data.split
+    deps:
+    - path: data/processed/deduped.csv
+      hash: md5
+      md5: 10b11e4bd1162e8534383009d702fa1a
+      size: 14275765
+    - path: src/data/split.py
+      hash: md5
+      md5: da40ec229982c05b9d6c43ac2681b2fa
+      size: 1153
+    outs:
+    - path: data/processed/test.csv
+      hash: md5
+      md5: 379a1531ac8dcd072559160c6bb6524d
+      size: 2840700
+    - path: data/processed/train.csv
+      hash: md5
+      md5: b573c8b458be6e90138e0f482e4200ac
+      size: 11435115
