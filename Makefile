@@ -23,4 +23,4 @@ stack-down:
 	docker compose down
 
 bench:
-	uv run python scripts/benchmark.py
+	uv run python -m scripts.benchmark
