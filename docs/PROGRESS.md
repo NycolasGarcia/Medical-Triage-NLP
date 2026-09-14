@@ -9,9 +9,9 @@ snapshot numérico, as evidências e o veredito.
 | Campo | Valor |
 |---|---|
 | Fase atual | F3 — API, container e decisão arquitetural |
-| Micro (fase) | 70% (7/10) |
-| Macro (rubrica coberta) | 16,9% |
-| Último checkpoint | 2026-09-14 — caixa 3.7 fechada (ADR-0002 aceito) |
+| Micro (fase) | 90% (9/10) |
+| Macro (rubrica coberta) | 18,3% |
+| Último checkpoint | 2026-09-14 — caixas 3.8–3.9 fechadas (README + ARCHITECTURE.md) |
 | Bloqueios | Nenhum conhecido |
 
 ## Progresso macro por fase
@@ -21,12 +21,12 @@ snapshot numérico, as evidências e o veredito.
 | F0 Scaffolding | 3 | 100% | 3.0 |
 | F1 Dados e EDA | 4 | 100% | 4.0 |
 | F2 Baselines | 5 | 100% | 5.0 |
-| F3 API e container | 7 | 70% | 4.9 |
+| F3 API e container | 7 | 90% | 6.3 |
 | F4 CI/CD e Airflow | 27 | 0% | 0.0 |
 | F5 Monitoramento | 20 | 0% | 0.0 |
 | F6 Modelo final e latência | 15 | 0% | 0.0 |
 | F7 Consolidação e entrega | 19 | 0% | 0.0 |
-| **Macro** | **100** | | **16.9%** |
+| **Macro** | **100** | | **18.3%** |
 
 ---
 
@@ -506,3 +506,19 @@ só que para retreino, não para servir triagem.
 
 Caixas: 7/10 -> micro 70%. Macro: 16,9%. Próxima ação: caixa 3.8 (resumo do
 ADR-0002 no README, que ainda não existe na raiz do repositório).
+
+### NOTA — 2026-09-14 (4)
+
+Caixas 3.8 e 3.9 fechadas. `README.md` criado na raiz (não existia) com
+contexto breve e a seção de arquitetura de deploy (resumo do ADR-0002) — setup/
+execução/resultados completos ficam para F7 (caixa 7.2), README por enquanto é
+propositalmente enxuto. `docs/ARCHITECTURE.md` reescrito com os dois diagramas
+mermaid pedidos (request e treino), agora refletindo o que **existe de fato**
+(API, middleware, `train.py`, pipeline DVC), com elementos planejados (F4/F5/F6)
+marcados com seta tracejada em vez de aparecer como se já estivessem prontos —
+o esqueleto anterior (F0) misturava aspiração com realidade sem distinguir.
+Tabela de componentes ganhou coluna de status; tabela de ADRs vinculados
+atualizada (0001/0002/0003 aceitos, 0004/0005/0008 ainda planejados).
+
+Caixas: 9/10 -> micro 90%. Macro: 18,3%. Falta só 3.10 (CHECKPOINT de
+fechamento de F3).
