@@ -12,6 +12,7 @@ _STANDARD_RECORD_ATTRS = frozenset(logging.LogRecord("", 0, "", 0, "", (), None)
 
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
+        """Serializa o LogRecord em uma linha JSON (timestamp, nível, logger, mensagem, extras)."""
         payload = {
             "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,
@@ -26,6 +27,7 @@ class JsonFormatter(logging.Formatter):
 
 
 def configure_logging() -> None:
+    """Configura o logger raiz para emitir JSON estruturado em stdout."""
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(JsonFormatter())
 
@@ -36,4 +38,5 @@ def configure_logging() -> None:
 
 
 def get_logger(name: str) -> logging.Logger:
+    """Retorna um logger nomeado, já sob a configuração central."""
     return logging.getLogger(name)

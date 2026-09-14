@@ -36,7 +36,6 @@ def dedupe_near(df: pd.DataFrame, text_col: str = "text", threshold: float = 0.9
     for i, (sim, j) in enumerate(zip(similarity, neighbor, strict=True)):
         if sim >= threshold and i not in to_drop and j not in to_drop:
             to_drop.add(max(i, j))
-
-    restantes = len(df) - len(to_drop)
-    logger.info("dedupe_near", extra={"removidas": len(to_drop), "restantes": restantes})
+    extra = {"removidas": len(to_drop), "restantes": len(df) - len(to_drop)}
+    logger.info("dedupe_near", extra=extra)
     return df.drop(df.index[list(to_drop)]).reset_index(drop=True)

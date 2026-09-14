@@ -25,6 +25,7 @@ def compute_metrics(y_true, y_pred, y_proba) -> dict[str, float]:
 
 
 def confusion_matrix_3x3(y_true, y_pred) -> np.ndarray:
+    """Matriz de confusão 3x3, na ordem normal/atencao/urgente."""
     return confusion_matrix(y_true, y_pred, labels=list(URGENCY_CLASSES))
 
 

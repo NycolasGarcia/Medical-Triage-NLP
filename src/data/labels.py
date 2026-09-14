@@ -12,7 +12,9 @@ URGENCY_CLASSES = ("normal", "atencao", "urgente")
 
 
 class UrgencyMappingStrategy(Protocol):
-    def map(self, original_label: str) -> str: ...
+    def map(self, original_label: str) -> str:
+        """Mapeia um rótulo original do corpus para uma faixa de urgência."""
+        ...
 
 
 class HeuristicUrgencyMapper:
@@ -28,6 +30,7 @@ class HeuristicUrgencyMapper:
     }
 
     def map(self, original_label: str) -> str:
+        """Aplica o mapeamento de ADR-0001; levanta ValueError para rótulo desconhecido."""
         try:
             return self._MAPPING[original_label]
         except KeyError as exc:

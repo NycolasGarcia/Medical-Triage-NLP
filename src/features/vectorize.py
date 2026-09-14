@@ -6,7 +6,9 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 
 class VectorizerStrategy(Protocol):
-    def build(self) -> TfidfVectorizer: ...
+    def build(self) -> TfidfVectorizer:
+        """Constrói o vetorizador configurado pela estratégia."""
+        ...
 
 
 class TfidfStrategy:
@@ -16,5 +18,6 @@ class TfidfStrategy:
         self.max_features = max_features
 
     def build(self) -> TfidfVectorizer:
+        """Constrói o TfidfVectorizer com o `max_features` configurado."""
         # stop_words=None (padrão): negadores clínicos ("não", "sem") não são removidos.
         return TfidfVectorizer(max_features=self.max_features)

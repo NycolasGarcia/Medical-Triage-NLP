@@ -13,6 +13,7 @@ logger = get_logger(__name__)
 
 
 def prepare(raw_dir: Path) -> pd.DataFrame:
+    """Executa o pré-processamento: carrega, mapeia rótulo de urgência e deduplica."""
     df = load_raw(raw_dir)
     df = apply_urgency_mapping(df)
     df = dedupe_exact(df)
