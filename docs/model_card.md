@@ -78,7 +78,12 @@ original vs. otimizado). Ver `LATENCY.md`.
 
 1. Rótulo derivado por heurística (ADR-0001) — a performance mede aderência ao
    mapeamento, não acurácia clínica.
-2. Corpus de abstracts, não laudos reais.
+2. Corpus de abstracts em **inglês**, não laudos reais em português. A documentação
+   do projeto é em português, mas o texto de entrada esperado pela API é em inglês
+   — é o idioma do dataset recomendado pelo enunciado, não uma inconsistência a
+   corrigir. Testado manualmente em F3: o modelo perde poder discriminativo em
+   texto português (probabilidades quase uniformes), e funciona como esperado em
+   inglês (ex.: frase de choque cardiogênico → 66,5% `urgente`).
 3. Modelo de saco de palavras (unigramas): negação e contexto de frase não são
    capturados — "sem sinais de X" e "sinais de X" têm representação muito parecida
    nesta versão. Negadores **não são removidos** pelo vetorizador (stopwords
@@ -101,7 +106,7 @@ original vs. otimizado). Ver `LATENCY.md`.
 | Texto muito curto / vazio | Predição instável | Validação de tamanho mínimo na API |
 | Laudo com negação pesada | Sub ou sobre-triagem | Negadores não são removidos hoje; n-gramas (1,2) planejados para F6 |
 | Vocabulário novo (drift) | Queda silenciosa de qualidade | Monitorar distribuição de classes preditas (F5) |
-| Idioma diferente do treino | Saída sem sentido | Checagem de idioma na ingestão |
+| Texto em português (ou outro idioma fora do treino) | Saída sem sentido — o modelo espera inglês (idioma do dataset), não é falha de configuração | Nenhuma — decisão consciente (item 2 das limitações); exemplos de API/demo/vídeo usam texto em inglês |
 
 ## 10. Monitoramento em produção
 

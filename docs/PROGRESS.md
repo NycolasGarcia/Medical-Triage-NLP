@@ -9,9 +9,9 @@ snapshot numérico, as evidências e o veredito.
 | Campo | Valor |
 |---|---|
 | Fase atual | F3 — API, container e decisão arquitetural |
-| Micro (fase) | 0% |
-| Macro (rubrica coberta) | 12% |
-| Último checkpoint | 2026-09-10 — F2 fechada 9/9, todos os hard requirements ok |
+| Micro (fase) | 40% (4/10) |
+| Macro (rubrica coberta) | 14,8% |
+| Último checkpoint | 2026-09-14 — caixas 3.1–3.4 fechadas (API funcional + testes) |
 | Bloqueios | Nenhum conhecido |
 
 ## Progresso macro por fase
@@ -21,12 +21,12 @@ snapshot numérico, as evidências e o veredito.
 | F0 Scaffolding | 3 | 100% | 3.0 |
 | F1 Dados e EDA | 4 | 100% | 4.0 |
 | F2 Baselines | 5 | 100% | 5.0 |
-| F3 API e container | 7 | 0% | 0.0 |
+| F3 API e container | 7 | 40% | 2.8 |
 | F4 CI/CD e Airflow | 27 | 0% | 0.0 |
 | F5 Monitoramento | 20 | 0% | 0.0 |
 | F6 Modelo final e latência | 15 | 0% | 0.0 |
 | F7 Consolidação e entrega | 19 | 0% | 0.0 |
-| **Macro** | **100** | | **12.0%** |
+| **Macro** | **100** | | **14.8%** |
 
 ---
 
@@ -388,3 +388,51 @@ um teste real disso, só o smoke trivial de config/logging do F0.
 Caixa 3.2 **não fechada ainda** — falta a parte de "carregar no startup, não
 por request" (decisão a registrar), que só existe quando a API existir
 (caixa 3.1). `ruff check .` e `pytest` verdes (25/25).
+
+### CHECKPOINT — F3 «API, container e decisão arquitetural» · execução · 2026-09-14
+
+HARD REQUIREMENTS DA FASE
+- HR-3.1 API funcional em container -> parcial (API funcional local; container
+  ainda não, caixa 3.5)
+- HR-3.2 latência baseline medida com protocolo -> pendente (caixa 3.6)
+- HR-3.3 ADR-0002 aceito e resumido no README -> pendente (caixa 3.7/3.8)
+- HR-3.4 ≥ 3 testes verdes -> ok (`tests/test_api.py`, 3 testes; suíte total 28/28)
+
+ESTADO
+- Caixas da fase: 4/10 -> micro 40%
+- Macro: 14,8%
+- Rubrica tocada: R5 (parcial, 7%)
+
+SITUAÇÃO
+- Feito: `src/api/{main,schemas,model_runtime}.py` — `POST /predict` e
+  `GET /health` com validação Pydantic (`PredictRequest`/`PredictResponse`/
+  `HealthResponse`); modelo carregado no `lifespan` do FastAPI (startup, não
+  por request — decisão registrada em comentário no código, não precisou de
+  ADR por ser escolha padrão de baixo risco); middleware de logging por
+  requisição (`request_id`, rota, status, latência em ms, classe predita).
+  `tests/test_api.py` com os 3 testes previstos em §13 (health 200, predict
+  válido, payload inválido 422); `tests/conftest.py` com fixtures
+  compartilhadas (`sample_train_csv`, `isolated_mlflow`) para não depender do
+  `mlflow.db`/modelo reais em teste. Testado manualmente com `uvicorn` real:
+  startup carrega o modelo, `/health` e `/predict` respondem certo, log JSON
+  por requisição confirmado (`request_id`, `latencia_ms`, `classe_predita`).
+- Achado durante o teste manual (não estava documentado): o modelo é
+  treinado inteiramente em **inglês** (Medical Abstracts TC Corpus). Texto em
+  português produz probabilidades quase uniformes (sem poder discriminativo);
+  o mesmo conteúdo em inglês funciona como esperado (frase de choque
+  cardiogênico → 66,5% `urgente`). Decisão do autor: **não é bug nem
+  inconsistência a corrigir** — a documentação do projeto segue em português,
+  mas a API/demo/vídeo usam texto em inglês, por ser o idioma do dataset
+  recomendado pelo enunciado. Registrado com destaque em `model_card.md`
+  (limitação 2 e tabela de cenários de falha), não mais como hipótese
+  genérica de "idioma diferente do treino".
+- Em andamento agora: nada — pausado para revisão antes de seguir.
+- Falta para fechar a fase: 3.5 (Dockerfile multi-stage) · 3.6 (latência
+  baseline dentro do container) · 3.7 (ADR-0002 aceito) · 3.8 (README) · 3.9
+  (ARCHITECTURE.md com diagramas de fato) · 3.10 (checkpoint de fechamento).
+- Bloqueios / decisões pendentes do autor: nenhum conhecido.
+- Riscos observados: `docker` foi validado em F0 mas o Dockerfile em si ainda
+  não existe — caixa 3.5 é a primeira vez que isso é exercitado de verdade.
+
+VEREDITO: em execução — próxima ação: caixa 3.5 (Dockerfile multi-stage) para
+então medir a latência baseline dentro do container (caixa 3.6).
