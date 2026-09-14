@@ -603,3 +603,37 @@ SITUAÇÃO
 
 VEREDITO: em execução — próxima ação: caixa 4.1 (expandir CI) ou 4.5 (DAG),
 a decidir com o autor.
+
+### NOTA — 2026-09-14 (5)
+
+Caixa 4.1 **em execução, ainda não fechada** (autor escolheu atacar 4.1 antes
+de 4.5, pelo raciocínio de reduzir risco antes — qualquer código novo da DAG
+nasce sob CI, em vez de escrito sem rede de segurança). `.github/workflows/ci.yml`
+expandido de 1 job (`lint`) para 3 encadeados (`lint` → `test` → `build`),
+via `needs:`.
+
+Resolvida a pendência do DVC-remote-em-CI (registrada como risco desde F1):
+testei localmente simulando checkout limpo de verdade — apaguei `data/` **e**
+`.dvc/cache` (não só `data/`, que só teria testado o cache local, não o
+cenário real de CI) — `dvc repro` reconstruiu os 3 estágios do zero em ~15s,
+sem precisar do remote nem de credencial (fonte é o GitHub público). Schema
+test parou de pular silenciosamente. `dvc.lock` atualizado (hashes de
+`dedupe.py`/`labels.py` mudaram nas edições de docstring desta sessão, nunca
+re-propagado até agora).
+
+Job `build` roda `dvc repro` + `python -m src.models.train` antes do
+`docker build` — a imagem copia `models/` no Dockerfile, precisa existir
+artefato antes, e cada job do CI começa de checkout limpo (não herda estado
+de outro job sem passar artefato explicitamente).
+
+Cobertura de teste (`pytest --cov=src --cov-report=term-missing`) já embutida
+no job `test` — resultado local 68% (`src/data/load.py`, `prepare.py`,
+`split.py` em 0% porque só rodam via script, não são importados por teste
+diretamente; não é problema, é esperado). Caixa 4.3 **não marcada ainda** —
+falta confirmar que o relatório aparece certo no log real do GitHub Actions,
+não só localmente.
+
+Caixas: 0/8 ainda -> micro 0%. Macro segue 19,0% (sem mudança) — caixa só
+fecha com CI real verde no GitHub Actions, não com validação local (§10.1:
+caixa marcada sem artefato verificável é pior que caixa desmarcada). Próxima
+ação: push e confirmar os 3 jobs verdes de verdade.

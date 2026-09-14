@@ -19,3 +19,40 @@ jobs:
       - run: uv sync
 
       - run: uv run ruff check .
+
+  test:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - run: uv sync
+
+      # Sem remote acessível no runner: reconstrói os dados direto da fonte
+      # canônica (GitHub, sem credencial) em vez de `dvc pull`.
+      - run: uv run dvc repro
+
+      - run: uv run pytest --cov=src --cov-report=term-missing
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - run: uv sync
+
+      - run: uv run dvc repro
+
+      # A imagem copia models/ no build — precisa existir um artefato antes.
+      - run: uv run python -m src.models.train
+
+      - run: docker build -t medical-triage-nlp:ci .
