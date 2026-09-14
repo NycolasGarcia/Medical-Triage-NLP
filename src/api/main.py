@@ -1,0 +1,63 @@
+"""Aplicação FastAPI de triagem de urgência: `/predict` e `/health`."""
+
+import time
+import uuid
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request, Response
+
+from src.api.model_runtime import MODEL_VERSION, load_pipeline
+from src.api.schemas import HealthResponse, PredictRequest, PredictResponse
+from src.logging_config import configure_logging, get_logger
+
+logger = get_logger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Carrega o modelo uma única vez no startup — não por requisição (decisão de F3)."""
+    configure_logging()
+    app.state.pipeline = load_pipeline()
+    logger.info("modelo_carregado", extra={"model_version": MODEL_VERSION})
+    yield
+
+
+app = FastAPI(title="Triagem de Urgência", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def log_requisicao(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
+    """Mede latência por requisição e loga id, rota, status e classe predita (se houver)."""
+    request_id = str(uuid.uuid4())
+    start = time.perf_counter()
+    response = await call_next(request)
+    latencia_ms = round((time.perf_counter() - start) * 1000, 2)
+    logger.info(
+        "requisicao",
+        extra={
+            "request_id": request_id,
+            "path": request.url.path,
+            "status_code": response.status_code,
+            "latencia_ms": latencia_ms,
+            "classe_predita": getattr(request.state, "predicted_label", None),
+        },
+    )
+    return response
+
+
+@app.get("/health", response_model=HealthResponse)
+def health() -> HealthResponse:
+    return HealthResponse()
+
+
+@app.post("/predict", response_model=PredictResponse)
+def predict(body: PredictRequest, request: Request) -> PredictResponse:
+    pipeline = request.app.state.pipeline
+    proba = pipeline.predict_proba([body.text])[0]
+    probabilities = {label: float(p) for label, p in zip(pipeline.classes_, proba, strict=True)}
+    label = max(probabilities, key=probabilities.get)
+    request.state.predicted_label = label
+    return PredictResponse(label=label, probabilities=probabilities, model_version=MODEL_VERSION)
