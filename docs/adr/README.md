@@ -15,5 +15,5 @@ Um ADR só existe se houver alternativa descartada. Sem alternativa, é anotaç�
 | 0005 | Matriz de custo FP/FN e política de limiar | planejado | F6 |
 | 0006 | Gestor de dependências (uv vs. Poetry) | aceito | F0 |
 | 0007 | DVC dentro ou fora do escopo desta fase | supersedido por ADR-0009 | F0 |
-| 0008 | Estratégia de retreino e critério de promoção do modelo | planejado | F4 |
+| 0008 | Estratégia de retreino e critério de promoção do modelo | aceito | F4 |
 | 0009 | DVC dentro do escopo (supersede ADR-0007) | aceito | F0 |

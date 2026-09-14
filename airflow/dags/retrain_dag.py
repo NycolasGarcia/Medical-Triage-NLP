@@ -2,9 +2,10 @@
 
 Cada task chama funções já existentes em `src/` (nenhuma lógica de negócio
 vive aqui, só orquestração — ver §12 do CLAUDE.md). Registra uma nova versão
-do modelo no MLflow Model Registry a cada execução; **não promove** a
-Staging/Production automaticamente — o critério de promoção é decisão de
-ADR-0008 (F6), fora do escopo desta DAG.
+do modelo no MLflow Model Registry a cada execução e calcula se ela atinge o
+piso de elegibilidade de promoção (ADR-0008) — **não promove** sozinha; a
+troca do alias `@production` continua decisão manual até a matriz de custo
+de ADR-0005 (F6) existir.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ import sys
 from pathlib import Path
 
 import pendulum
-from airflow.sdk import dag, task
+from airflow.sdk import Param, dag, task
 
 # Airflow importa este arquivo diretamente (não via `python -m`), então o
 # pacote `src` do projeto não entra em sys.path por padrão — as tasks abaixo
@@ -25,10 +26,26 @@ if str(PROJECT_ROOT) not in sys.path:
 
 @dag(
     dag_id="retrain_triage_model",
-    schedule=None,
+    schedule="@weekly",  # cadência de produção pretendida; dispare manual a qualquer momento
     start_date=pendulum.datetime(2026, 1, 1, tz="UTC"),
     catchup=False,
     tags=["triagem-urgencia", "retreino"],
+    params={
+        "min_f1_macro": Param(
+            0.70,
+            type="number",
+            minimum=0,
+            maximum=1,
+            description="Piso de F1-macro no teste reservado (ADR-0008).",
+        ),
+        "max_sub_triagem_increase": Param(
+            0.03,
+            type="number",
+            minimum=0,
+            maximum=1,
+            description="Regressão máxima aceitável de sub-triagem vs. produção (ADR-0008).",
+        ),
+    },
 )
 def retrain_triage_model():
     """Pipeline de retreino do classificador de urgência de laudos médicos."""
@@ -79,17 +96,43 @@ def retrain_triage_model():
         return metrics
 
     @task()
-    def register(train_result: dict, evaluate_result: dict) -> dict:
+    def register(train_result: dict, evaluate_result: dict, params: dict) -> dict:
         import mlflow
 
+        from src.models.promotion import (
+            MODEL_NAME,
+            get_production_sub_triagem_rate,
+            meets_promotion_criteria,
+        )
         from src.models.tracking import configure_tracking
 
         configure_tracking()
         model_uri = f"runs:/{train_result['run_id']}/model"
-        version = mlflow.register_model(model_uri, name="triagem-urgencia")
+        version = mlflow.register_model(model_uri, name=MODEL_NAME)
+
+        client = mlflow.MlflowClient()
+        total = sum(
+            evaluate_result[k]
+            for k in ("triage_sub_triagem", "triage_sobre_triagem", "triage_acerto_exato")
+        )
+        sub_triagem_rate = evaluate_result["triage_sub_triagem"] / total
+        baseline_rate = get_production_sub_triagem_rate(client)
+        elegivel = meets_promotion_criteria(
+            evaluate_result["f1_macro"],
+            sub_triagem_rate,
+            params["min_f1_macro"],
+            params["max_sub_triagem_increase"],
+            baseline_rate,
+        )
+        v = version.version
+        client.set_model_version_tag(MODEL_NAME, v, "sub_triagem_rate", str(sub_triagem_rate))
+        client.set_model_version_tag(MODEL_NAME, v, "elegivel_promocao", str(elegivel))
+
         return {
             "registered_version": version.version,
             "f1_macro_teste": evaluate_result["f1_macro"],
+            "sub_triagem_rate": round(sub_triagem_rate, 4),
+            "elegivel_promocao": elegivel,
         }
 
     ingest_task = ingest()
