@@ -310,3 +310,81 @@ SITUAÇÃO
 
 VEREDITO: **PODE AVANÇAR para F3** — todos os hard requirements de F2 fechados,
 nenhuma exceção pendente.
+
+### CHECKPOINT — F3 «API, container e decisão arquitetural» · abertura · 2026-09-10
+
+HARD REQUIREMENTS DA FASE
+- HR-3.1 API funcional em container -> pendente
+- HR-3.2 latência baseline medida com protocolo -> pendente
+- HR-3.3 ADR-0002 aceito e resumido no README -> pendente
+- HR-3.4 ≥ 3 testes verdes -> já satisfeito globalmente (19 testes), mas caixa
+  3.4 pede testes específicos da API ainda não escritos
+
+ESTADO
+- Caixas da fase: 0/10 -> micro 0%
+- Macro: 12% (herdado de F0+F1+F2)
+- Rubrica tocada: R5 (parcial, 7%)
+
+SITUAÇÃO
+- Pré-requisito não listado explicitamente em nenhuma caixa, mas necessário para
+  3.1/3.2: nenhum modelo final foi persistido ainda — F2 só avaliou em CV, não
+  salvou um artefato treinado no dataset completo. Vai ser feito como parte da
+  caixa 3.2 (carregar modelo no startup implica ter o que carregar).
+
+VEREDITO: em execução — próxima ação: treinar e persistir o modelo vencedor de
+F2 (TF-IDF + Regressão Logística) no dataset de treino completo, depois montar
+a API FastAPI.
+
+### NOTA — 2026-09-14
+
+Antes de seguir com a caixa 3.2 (persistir modelo), decidiu-se estender a
+comparação de F2 de 3 para 6 candidatos — ainda é escopo de F2/R1 (comparação de
+modelo), não de F3 (API/container), e trocar de modelo depois de montar a API
+custaria retrabalho. Candidatos adicionados: Multinomial Naive Bayes, LightGBM
+(gradient boosting sobre TF-IDF) e LinearSVC calibrado (`CalibratedClassifierCV`,
+resolvendo a falta de `predict_proba` que motivou o descarte original do
+LinearSVC em F2).
+
+Resultado: **Regressão Logística confirmada como vencedora** (F1-macro 0,731,
+ROC-AUC 0,877), sem nenhum dos 3 novos candidatos superando-a. Achado relevante:
+Multinomial NB tem a menor sub-triagem de todos os candidatos reais (6,9%),
+registrado em ADR-0003 como candidato a revisitar em F6 (ADR-0005) quando a
+matriz de custo formal existir.
+
+Achados técnicos registrados em ADR-0003 (não descrição do enunciado, decisão de
+engenharia): `HistGradientBoostingClassifier` do sklearn não aceita matriz
+esparsa (exigiria densificar TF-IDF, ~1,4 GB por dobra); XGBoost instala ~326 MB
+de dependências CUDA/NCCL irrelevantes para uso em CPU via `uv add` — ambos
+descartados em favor de LightGBM (3,3 MB, sem dependência de GPU).
+
+Os 3 candidatos originais (dummy/logreg/random_forest) foram re-treinados nesta
+sessão, em máquina diferente da que gerou os números publicados antes — mesmos
+valores de F1-macro na precisão exibida, confirmando reprodutibilidade do
+pipeline entre ambientes.
+
+**ADR-0003 aceito.** `docs/EXPERIMENTS.md` e `docs/model_card.md` atualizados
+com a tabela de 6 candidatos e os run ids atuais do MLflow. `dvc status` seguiu
+limpo — nenhum dado mudou, só código de modelo e experimentos; nenhum novo
+stage do DVC foi necessário. `ruff check .` e `pytest` verdes (24/24, incluindo
+novo `tests/test_factory.py`).
+
+Não muda o veredito de F2 (já fechada 9/9, PODE AVANÇAR) nem reabre a fase
+formalmente — é extensão de escopo registrada antes do primeiro commit de
+código de F3, para não persistir/servir um modelo que a própria comparação
+ainda não tinha decidido ser o melhor.
+
+### NOTA — 2026-09-14 (2)
+
+Pré-requisito da caixa 3.2 resolvido: `src/models/train.py` treina o pipeline
+vencedor (TF-IDF + Regressão Logística, `build_pipeline`) no
+`data/processed/train.csv` completo (8.980 amostras, teste segue reservado) e
+persiste em `models/current/model.joblib` (1,2 MB — git-ignorado por design,
+`/models/` no `.gitignore`; versionado via MLflow, não via git). Run
+`final_train_logreg` logado no MLflow com o modelo completo
+(`mlflow.sklearn.log_model`). `tests/test_train.py` adicionado como o smoke
+test de pipeline ponta a ponta previsto em §13 (item 1) — ainda não existia
+um teste real disso, só o smoke trivial de config/logging do F0.
+
+Caixa 3.2 **não fechada ainda** — falta a parte de "carregar no startup, não
+por request" (decisão a registrar), que só existe quando a API existir
+(caixa 3.1). `ruff check .` e `pytest` verdes (25/25).
