@@ -9,9 +9,9 @@ snapshot numérico, as evidências e o veredito.
 | Campo | Valor |
 |---|---|
 | Fase atual | F3 — API, container e decisão arquitetural |
-| Micro (fase) | 40% (4/10) |
-| Macro (rubrica coberta) | 14,8% |
-| Último checkpoint | 2026-09-14 — caixas 3.1–3.4 fechadas (API funcional + testes) |
+| Micro (fase) | 60% (6/10) |
+| Macro (rubrica coberta) | 16,2% |
+| Último checkpoint | 2026-09-14 — caixas 3.5–3.6 fechadas (Dockerfile + latência baseline) |
 | Bloqueios | Nenhum conhecido |
 
 ## Progresso macro por fase
@@ -21,12 +21,12 @@ snapshot numérico, as evidências e o veredito.
 | F0 Scaffolding | 3 | 100% | 3.0 |
 | F1 Dados e EDA | 4 | 100% | 4.0 |
 | F2 Baselines | 5 | 100% | 5.0 |
-| F3 API e container | 7 | 40% | 2.8 |
+| F3 API e container | 7 | 60% | 4.2 |
 | F4 CI/CD e Airflow | 27 | 0% | 0.0 |
 | F5 Monitoramento | 20 | 0% | 0.0 |
 | F6 Modelo final e latência | 15 | 0% | 0.0 |
 | F7 Consolidação e entrega | 19 | 0% | 0.0 |
-| **Macro** | **100** | | **14.8%** |
+| **Macro** | **100** | | **16.2%** |
 
 ---
 
@@ -436,3 +436,59 @@ SITUAÇÃO
 
 VEREDITO: em execução — próxima ação: caixa 3.5 (Dockerfile multi-stage) para
 então medir a latência baseline dentro do container (caixa 3.6).
+
+### CHECKPOINT — F3 «API, container e decisão arquitetural» · execução · 2026-09-14 (2)
+
+HARD REQUIREMENTS DA FASE
+- HR-3.1 API funcional em container -> ok (`docker run` do zero, `/health` e
+  `/predict` testados contra a imagem publicada)
+- HR-3.2 latência baseline medida com protocolo -> ok (N=1000, warm-up=100, 3
+  repetições, `docs/LATENCY.md`)
+- HR-3.3 ADR-0002 aceito e resumido no README -> pendente (caixa 3.7/3.8)
+- HR-3.4 ≥ 3 testes verdes -> ok (mantido; suíte total 28/28)
+
+PORTÕES NUMÉRICOS
+
+| Portão | Alvo | Medido | Status |
+|---|---|---|---|
+| Container sobe do zero (`docker run`) | sim | sim | ok |
+| `/health` | < 50 ms | 1,66 ms (média de 10) | ok |
+| Baseline p50/p95 com N e warm-up declarados | sim | p50 2,65 ms · p95 3,11 ms · N=1000 · warmup=100 | ok |
+| Tamanho da imagem medido e registrado | sim | 1,03 GB | ok (medido; não é alvo numérico em F3) |
+| 3 testes verdes | sim | 28/28 | ok |
+
+ESTADO
+- Caixas da fase: 6/10 -> micro 60%
+- Macro: 16,2%
+- Rubrica tocada: R5 (parcial, 7%)
+
+SITUAÇÃO
+- Feito: bloqueio de ambiente resolvido — Docker instalado nesta máquina
+  (transferida, sem o setup anterior); grupo `docker` só passou a valer para
+  esta sessão depois de um reboot completo do SO (reload de janela/sessão do
+  VSCode não bastou, registrado como aprendizado de ambiente). `Dockerfile`
+  multi-stage (builder com `uv sync --frozen --no-dev`, runtime `python:3.11-slim`
+  + `libgomp1` pro LightGBM, usuário não-root `appuser`) builda de primeira.
+  `docker run` publicado em `127.0.0.1:8126`, `/health` e `/predict` responderam
+  certo contra a imagem real. `scripts/benchmark.py` rodado dentro do protocolo
+  completo (N=1000, warmup=100, 3 repetições): p50 2,65 ms / p95 3,11 ms (mediana
+  das 3 execuções) / p99 3,30 ms — números muito baixos e estáveis entre execuções
+  (sem outlier). Breakdown isolado (fora da API): vetorização TF-IDF domina
+  (73,7% do tempo de pipeline), inferência 25,4%, serialização 0,9% — registrado
+  como leitura para calibrar expectativa do ganho de ONNX em F6 (se não tocar a
+  vetorização, o teto de ganho é limitado). `docs/LATENCY.md` preenchido por
+  completo (protocolo + baseline + breakdown).
+- Achado não bloqueante: imagem de 1,03 GB é pesada pra um TF-IDF+LogReg — maior
+  camada (~646 MB) é o conjunto de dependências, e `mlflow` (dependência de
+  produção, usada só por `train.py`/`experiments.py`) provavelmente é o maior
+  contribuinte, já que a API não importa `mlflow` em nenhum momento. Registrado
+  em `LATENCY.md` como candidato a otimização, não bloqueia F3 (portão pede
+  "medido e registrado", não um alvo numérico).
+- Em andamento agora: nada — pausado para seguir com 3.7 (ADR-0002).
+- Falta para fechar a fase: 3.7 (ADR-0002 aceito) · 3.8 (README) · 3.9
+  (ARCHITECTURE.md com diagramas de fato) · 3.10 (checkpoint de fechamento).
+- Bloqueios / decisões pendentes do autor: nenhum conhecido.
+- Riscos observados: nenhum novo.
+
+VEREDITO: em execução — próxima ação: caixa 3.7, ADR-0002 (batch vs. real-time
++ nuvem-alvo teórica).
