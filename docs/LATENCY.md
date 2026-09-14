@@ -39,13 +39,16 @@ de execução isolada. Valores abaixo são da execução com o p95 mediano.
 
 **Observação sobre o tamanho da imagem:** não é o "imagem enxuta" que se esperaria de
 um modelo TF-IDF + Regressão Logística sozinho. A camada de dependências
-(`.venv` copiado do builder) responde por ~646 MB do total. Causa provável: `mlflow`
-é dependência de produção no `pyproject.toml` (usado por `src/models/train.py` e
-`src/models/experiments.py`), mas a API (`src/api/`) **não importa `mlflow`
-em nenhum momento** — só carrega o `model.joblib` via `joblib`. Candidato a
-otimização de imagem para revisitar (não bloqueia F3, portão pede só "medido e
-registrado", não um alvo numérico): separar dependências de treino/experimentação
-das de serving, ou usar `mlflow-skinny` no lugar de `mlflow` completo.
+(`.venv` copiado do builder) responde por ~646 MB do total. Causa: o pipeline
+completo (baixar dataset → notebooks → treinar com MLflow → persistir
+`model.joblib`) roda **antes** do container existir — a API só faz `joblib.load()`
+no startup e nunca importa `mlflow` — mas `pyproject.toml` ainda declara `mlflow`
+e `lightgbm` (dependências de treino) na mesma lista `dependencies` usada pelo
+`uv sync --no-dev` do Dockerfile, então elas entram na imagem de serving sem
+necessidade. **Decisão do autor (2026-09-14): adiar a separação treino/serving
+para F6** (caixa 6.1/6.6, mesma fase que trata otimização de latência formalmente)
+em vez de mexer agora — F3 já cumpre o portão ("medido e registrado", sem alvo
+numérico). Não esquecer ao reabrir F6.
 
 ## Otimizado (F6 — <ONNX / quantização>)
 
