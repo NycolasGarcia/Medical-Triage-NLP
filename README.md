@@ -18,6 +18,7 @@ Ferramentas:
 
 Detalhes:
 
+[![CI](https://github.com/NycolasGarcia/Medical-Triage-NLP/actions/workflows/ci.yml/badge.svg)](https://github.com/NycolasGarcia/Medical-Triage-NLP/actions/workflows/ci.yml)
 ![Version](https://img.shields.io/badge/version-0.1.0-darkgrey?style=flat)
 ![Tests](https://img.shields.io/badge/tests-29%20passing-brightgreen?style=flat)
 ![Coverage](https://img.shields.io/badge/coverage-69%25-yellow?style=flat)
