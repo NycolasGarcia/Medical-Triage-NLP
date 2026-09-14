@@ -19,7 +19,14 @@ logger = get_logger(__name__)
 
 SEED = 42
 N_SPLITS = 5
-CANDIDATE_MODELS = ("dummy", "logreg", "random_forest")
+CANDIDATE_MODELS = (
+    "dummy",
+    "logreg",
+    "random_forest",
+    "multinomial_nb",
+    "lightgbm",
+    "linear_svc_calibrated",
+)
 
 
 def _evaluate_fold(model_name: str, X_text: pd.Series, y: pd.Series, train_idx, val_idx):
@@ -71,6 +78,7 @@ def _log_run(model_name: str, result: dict) -> None:
 
 
 def run_all_experiments() -> dict[str, dict]:
+    """Roda a CV de todos os `CANDIDATE_MODELS` e loga cada um no MLflow."""
     configure_tracking()
     train = pd.read_csv("data/processed/train.csv")
     X_text, y = train["text"], train["urgency_label"]
