@@ -13,7 +13,7 @@
 | Data | 2026-09-10 |
 | Framework | scikit-learn (ONNX Runtime entra em F6) |
 | Autor | Nycolas Garcia |
-| Rastreabilidade | MLflow run id `0dd51d0c`, experimento `triagem-urgencia` |
+| Rastreabilidade | MLflow run id `ed2e5ded`, experimento `triagem-urgencia` |
 
 ## 2. Uso pretendido
 
@@ -31,7 +31,9 @@ Ver `data_card.md`. Ponto crítico: o alvo é **proxy**, não urgência observad
 
 Média de 5-fold CV estratificada sobre `data/processed/train.csv` (8.980 amostras);
 o conjunto de teste (2.245 amostras) segue reservado, não usado nesta fase. Tabela
-comparativa completa (incluindo Dummy e Random Forest) em `docs/EXPERIMENTS.md`.
+comparativa completa (6 candidatos, incluindo Dummy, Random Forest, Multinomial NB,
+LightGBM e LinearSVC calibrado) em `docs/EXPERIMENTS.md` — a Regressão Logística
+seguiu vencedora em F1-macro e ROC-AUC após a comparação estendida (ADR-0003).
 
 | Métrica | Valor | Observação |
 |---|---|---|
@@ -42,7 +44,7 @@ comparativa completa (incluindo Dummy e Random Forest) em `docs/EXPERIMENTS.md`.
 | Recall `normal` | 0,584 | classe com mais confusão (ver matriz) |
 | ROC-AUC (OvR) | 0,877 | |
 
-Matriz de confusão 3×3: artefato `confusion_matrix.csv` no run MLflow `0dd51d0c`.
+Matriz de confusão 3×3: artefato `confusion_matrix.csv` no run MLflow `ed2e5ded`.
 
 ### Erros por tipo (sub-triagem vs. sobre-triagem)
 
