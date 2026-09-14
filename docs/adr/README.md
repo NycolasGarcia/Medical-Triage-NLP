@@ -9,7 +9,7 @@ Um ADR só existe se houver alternativa descartada. Sem alternativa, é anotaç�
 | ID | Título | Status | Fase |
 |---|---|---|---|
 | 0001 | Mapeamento de classes do corpus para faixas de urgência | aceito | F1 |
-| 0002 | Arquitetura de deploy: batch vs. real-time e nuvem-alvo | proposto | F3 |
+| 0002 | Arquitetura de deploy: batch vs. real-time e nuvem-alvo | aceito | F3 |
 | 0003 | Escolha do modelo base de classificação de texto | aceito | F2 |
 | 0004 | Técnica de otimização de latência (ONNX vs. quantização) | planejado | F6 |
 | 0005 | Matriz de custo FP/FN e política de limiar | planejado | F6 |

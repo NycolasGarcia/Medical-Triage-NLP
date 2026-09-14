@@ -9,9 +9,9 @@ snapshot numérico, as evidências e o veredito.
 | Campo | Valor |
 |---|---|
 | Fase atual | F3 — API, container e decisão arquitetural |
-| Micro (fase) | 60% (6/10) |
-| Macro (rubrica coberta) | 16,2% |
-| Último checkpoint | 2026-09-14 — caixas 3.5–3.6 fechadas (Dockerfile + latência baseline) |
+| Micro (fase) | 70% (7/10) |
+| Macro (rubrica coberta) | 16,9% |
+| Último checkpoint | 2026-09-14 — caixa 3.7 fechada (ADR-0002 aceito) |
 | Bloqueios | Nenhum conhecido |
 
 ## Progresso macro por fase
@@ -21,12 +21,12 @@ snapshot numérico, as evidências e o veredito.
 | F0 Scaffolding | 3 | 100% | 3.0 |
 | F1 Dados e EDA | 4 | 100% | 4.0 |
 | F2 Baselines | 5 | 100% | 5.0 |
-| F3 API e container | 7 | 60% | 4.2 |
+| F3 API e container | 7 | 70% | 4.9 |
 | F4 CI/CD e Airflow | 27 | 0% | 0.0 |
 | F5 Monitoramento | 20 | 0% | 0.0 |
 | F6 Modelo final e latência | 15 | 0% | 0.0 |
 | F7 Consolidação e entrega | 19 | 0% | 0.0 |
-| **Macro** | **100** | | **16.2%** |
+| **Macro** | **100** | | **16.9%** |
 
 ---
 
@@ -492,3 +492,17 @@ SITUAÇÃO
 
 VEREDITO: em execução — próxima ação: caixa 3.7, ADR-0002 (batch vs. real-time
 + nuvem-alvo teórica).
+
+### NOTA — 2026-09-14 (3)
+
+Caixa 3.7 fechada. **ADR-0002 aceito**: real-time via serviço containerizado
+(nuvem-alvo teórica: AWS ECS/Fargate atrás de ALB), com base na latência já
+medida em `LATENCY.md` (p95 3,11 ms) — não suposição. Serverless (Lambda)
+avaliado e descartado explicitamente por risco de cold start com imagem
+pesada de ML (~1 GB), não por preferência genérica. Batch descartado por
+contradizer o propósito do sistema. Híbrido registrado como observação: o
+retreino via Airflow (F4) já é, na prática, a trilha em lote do sistema —
+só que para retreino, não para servir triagem.
+
+Caixas: 7/10 -> micro 70%. Macro: 16,9%. Próxima ação: caixa 3.8 (resumo do
+ADR-0002 no README, que ainda não existe na raiz do repositório).
