@@ -699,3 +699,20 @@ promoção é ADR-0008 (F6), fora do escopo de F4.
 
 Caixas: 4/8 -> micro 50%. Macro: 32,5%. Próxima ação: caixa 4.2 (badge) ou
 4.4/4.6 (RUNBOOK do Airflow + ADR-0008 + parametrização) — a decidir.
+
+### NOTA — 2026-09-14 (8)
+
+README.md reescrito por completo, seguindo o template pessoal já usado em
+TC1/TC2 (badges, nav links, seções padronizadas) a pedido do autor — cobre
+bem mais do que a caixa 3.8 pedia (só resumo do ADR-0002). Adiantou boa
+parte do que seria caixa 7.2 ("README final"), mas **não fecha 7.2**: faltam
+resultados de F5 (dashboard)/F6 (ONNX, limiar)/F7 (vídeo), e o README já é
+explícito sobre isso — roadmap mostra Etapa 2 parcial e Etapas 3/4 vazias,
+sem fingir conclusão. Números conferidos contra o estado real do projeto
+nesta sessão (29 testes, 69% cobertura, métricas de EXPERIMENTS.md e do
+teste reservado desta sessão) — nenhum número inventado.
+
+Também adicionado `HEALTHCHECK` ao `Dockerfile` (usa `urllib` da stdlib
+contra `/health`, sem novo pacote) — testado, `docker inspect` reporta
+`healthy`. Não estava pedido por nenhuma caixa específica, mas é prática
+padrão de Dockerfile de produção e ficou barato de adicionar agora.
