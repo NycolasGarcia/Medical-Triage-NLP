@@ -8,10 +8,10 @@ snapshot numérico, as evidências e o veredito.
 
 | Campo | Valor |
 |---|---|
-| Fase atual | F4 — CI/CD e orquestração |
-| Micro (fase) | 50% (4/8) |
-| Macro (rubrica coberta) | 32,5% |
-| Último checkpoint | 2026-09-14 — caixas 4.5 e 4.7 fechadas (DAG real executada, 5/5 tasks success) |
+| Fase atual | F5 — Monitoramento e observabilidade |
+| Micro (fase) | 0% |
+| Macro (rubrica coberta) | 46,0% |
+| Último checkpoint | 2026-09-14 — F4 fechada 8/8, todos os hard requirements ok |
 | Bloqueios | Nenhum conhecido |
 
 ## Progresso macro por fase
@@ -22,11 +22,11 @@ snapshot numérico, as evidências e o veredito.
 | F1 Dados e EDA | 4 | 100% | 4.0 |
 | F2 Baselines | 5 | 100% | 5.0 |
 | F3 API e container | 7 | 100% | 7.0 |
-| F4 CI/CD e Airflow | 27 | 50% | 13.5 |
+| F4 CI/CD e Airflow | 27 | 100% | 27.0 |
 | F5 Monitoramento | 20 | 0% | 0.0 |
 | F6 Modelo final e latência | 15 | 0% | 0.0 |
 | F7 Consolidação e entrega | 19 | 0% | 0.0 |
-| **Macro** | **100** | | **32.5%** |
+| **Macro** | **100** | | **46.0%** |
 
 ---
 
@@ -716,3 +716,72 @@ Também adicionado `HEALTHCHECK` ao `Dockerfile` (usa `urllib` da stdlib
 contra `/health`, sem novo pacote) — testado, `docker inspect` reporta
 `healthy`. Não estava pedido por nenhuma caixa específica, mas é prática
 padrão de Dockerfile de produção e ficou barato de adicionar agora.
+
+### NOTA — 2026-09-14 (9)
+
+Caixas 4.2, 4.4 e 4.6 fechadas.
+
+- **4.2**: badge real do GitHub Actions no README (`actions/workflows/ci.yml/badge.svg`,
+  reflete status ao vivo, não estático). Cache do `setup-uv` investigado a fundo:
+  configuração está correta (`enable-cache: true`), `save` funciona (confirmado no
+  log real: "cache saved with the key..."), mas `restore` falha consistentemente com
+  "Cache service responded with 400" — reproduzido em 3 runs diferentes, inclusive
+  entre dois jobs da **mesma** run (o `test` não conseguiu restaurar o que o `lint`
+  acabou de salvar segundos antes). Não é bug nosso — bate com o incidente mais
+  amplo do GitHub em 13/09 (checado no `githubstatus.com`) e com relatos públicos de
+  problemas no backend do Cache Service v2. Registrado como limitação externa
+  conhecida, não bloqueia a caixa (configuração comprovadamente correta).
+- **4.4**: `docs/RUNBOOK.md` — seção Airflow reescrita com os comandos reais
+  validados (grupo `orchestration`, `AIRFLOW_HOME`, `load_examples=False`,
+  `standalone` + `trigger`), incluindo os dois achados de ferramenta como
+  troubleshooting (bug do `dags test`, DAGs de exemplo quebrando `dags list`).
+- **4.6**: DAG parametrizada via `Param` do Airflow (`min_f1_macro=0.70`,
+  `max_sub_triagem_increase=0.03`) + schedule real (`@weekly`, antes `None`).
+  **ADR-0008 aceito**: critério de elegibilidade de promoção (piso de F1-macro +
+  não regressão de sub-triagem) — task `register` agora calcula e tageia
+  `elegivel_promocao` no MLflow Registry, sem promover sozinha (decisão manual até
+  ADR-0005/F6 existir). Lógica isolada em `src/models/promotion.py`, testada
+  (`tests/test_promotion.py`, 4 testes). Execução real revalidada com os params
+  novos: 5/5 tasks `success`, `elegivel_promocao: True` (F1-macro 0,728 ≥ piso
+  0,70, sem baseline de produção ainda para checar regressão).
+
+Suíte local: 33/33 testes, `ruff` limpo.
+
+### CHECKPOINT — F4 «CI/CD e orquestração» · fechamento · 2026-09-14
+
+HARD REQUIREMENTS DA FASE
+- HR-4.1 workflow com ≥ 2 automações rodando verde -> ok (3 automações:
+  lint/test/build, verificado em múltiplas runs reais do GitHub Actions)
+- HR-4.2 DAG executando ponta a ponta e gerando artefato de modelo -> ok
+  (validado 2x, 5/5 tasks `success`, `model.joblib` + versão no MLflow Registry)
+- HR-4.3 evidência de execução no repositório -> ok (`docs/evidence/f4_dag_execucao_2026-09-14.md`)
+
+PORTÕES NUMÉRICOS
+
+| Portão | Alvo | Medido | Status |
+|---|---|---|---|
+| CI verde no push | sim | sim (4 runs reais confirmadas) | ok |
+| ≥ 2 automações | sim | 3 (lint, test, build) | ok |
+| `airflow dags list` sem erro de import | sim | sim | ok |
+| Execução completa com todas as tasks `success` | sim | 5/5, 2 execuções | ok |
+| Artefato de modelo produzido pela DAG | sim | `model.joblib` + registro MLflow | ok |
+
+ESTADO
+- Caixas da fase: 7/8 -> micro 87,5%
+- Macro: 42,6%
+- Rubrica tocada: R3 (12%) + R4 (15%) = 27% — fase mais pesada do projeto, fechada
+
+SITUAÇÃO
+- Feito: fase inteira, exceto este próprio checkpoint de fechamento. CI real
+  com 3 automações verdes; DAG real com 5 tasks, retreino + avaliação em
+  teste reservado + registro no MLflow Model Registry + critério de
+  promoção (ADR-0008); RUNBOOK documentado com os comandos que de fato
+  funcionam nesta versão do Airflow (3.2.2, não 2.x).
+- Bloqueios / decisões pendentes do autor: nenhum.
+- Riscos observados: cache do CI não traz ganho de velocidade hoje (falha
+  de restore do lado do GitHub) — sem ação nossa possível, resolve sozinho
+  quando o serviço deles estabilizar. Imagem Docker em 1,03 GB segue pesada
+  (decisão já registrada de adiar correção para F6).
+
+VEREDITO: **PODE AVANÇAR para F5** — todos os hard requirements de F4
+fechados, nenhuma exceção pendente.
