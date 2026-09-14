@@ -565,3 +565,41 @@ SITUAÇÃO
 
 VEREDITO: **PODE AVANÇAR para F4** — todos os hard requirements de F3
 fechados, nenhuma exceção pendente.
+
+### CHECKPOINT — F4 «CI/CD e orquestração» · abertura · 2026-09-14
+
+HARD REQUIREMENTS DA FASE
+- HR-4.1 workflow com ≥ 2 automações rodando verde -> pendente
+- HR-4.2 DAG executando ponta a ponta e gerando artefato de modelo -> pendente
+- HR-4.3 evidência de execução no repositório -> pendente
+
+ESTADO
+- Caixas da fase: 0/8 -> micro 0%
+- Macro: 19,0% (herdado)
+- Rubrica tocada: R3 (12%) + R4 (15%) = 27% — fase mais pesada do projeto
+
+SITUAÇÃO
+- Feito: **NV-5 fechado** (estava aberto desde o planejamento) — `airflow db
+  migrate` e `airflow standalone` rodaram limpos neste ambiente, scheduler/
+  triggerer/dag-processor/api-server todos `healthy`. Achado: é **Airflow
+  3.2.2**, não 2.x — mudança real de arquitetura (Task SDK, api-server no
+  lugar do webserver clássico), RUNBOOK e DAG precisam refletir isso, não
+  suposições de Airflow 2. Correção de dependência feita na hora: `uv add
+  apache-airflow` inicialmente foi pra `dependencies` (lista principal) —
+  moveu pra um grupo novo `orchestration` em `pyproject.toml`, porque senão
+  `uv sync --no-dev` (usado pelo builder do Dockerfile da API) instalaria
+  Airflow inteiro na imagem de serving, que não tem nada a ver com ele.
+  Confirmado com `uv sync --frozen --no-dev` de novo: Airflow não entra.
+  `.gitignore` também ganhou padrões novos (`airflow.db-shm`/`-wal`, arquivo
+  de senha gerado pelo Simple Auth Manager) que não existiam nas versões
+  antigas do Airflow — ficariam commitados por acidente sem isso (achado
+  antes de virar problema, não depois).
+- Em andamento agora: nada — pausado para reportar antes de escrever a DAG.
+- Falta para fechar a fase: 4.1-4.8 inteiras (nada além da validação de
+  ambiente foi feito ainda).
+- Bloqueios / decisões pendentes do autor: nenhum.
+- Riscos observados: nenhum novo além do já registrado (DVC remote local
+  não acessível em CI, a decidir na caixa 4.1).
+
+VEREDITO: em execução — próxima ação: caixa 4.1 (expandir CI) ou 4.5 (DAG),
+a decidir com o autor.

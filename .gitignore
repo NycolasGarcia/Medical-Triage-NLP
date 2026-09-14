@@ -29,9 +29,10 @@ env/
 
 # Airflow
 airflow/logs/
-airflow/airflow.db
+airflow/airflow.db*
 airflow/airflow.cfg
 airflow/webserver_config.py
+airflow/*.generated
 
 # Testes e cobertura
 .pytest_cache/
