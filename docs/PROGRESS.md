@@ -9,9 +9,9 @@ snapshot numérico, as evidências e o veredito.
 | Campo | Valor |
 |---|---|
 | Fase atual | F4 — CI/CD e orquestração |
-| Micro (fase) | 25% (2/8) |
-| Macro (rubrica coberta) | 25,75% |
-| Último checkpoint | 2026-09-14 — caixas 4.1 e 4.3 fechadas (CI real verde: lint+test+build) |
+| Micro (fase) | 50% (4/8) |
+| Macro (rubrica coberta) | 32,5% |
+| Último checkpoint | 2026-09-14 — caixas 4.5 e 4.7 fechadas (DAG real executada, 5/5 tasks success) |
 | Bloqueios | Nenhum conhecido |
 
 ## Progresso macro por fase
@@ -22,11 +22,11 @@ snapshot numérico, as evidências e o veredito.
 | F1 Dados e EDA | 4 | 100% | 4.0 |
 | F2 Baselines | 5 | 100% | 5.0 |
 | F3 API e container | 7 | 100% | 7.0 |
-| F4 CI/CD e Airflow | 27 | 25% | 6.75 |
+| F4 CI/CD e Airflow | 27 | 50% | 13.5 |
 | F5 Monitoramento | 20 | 0% | 0.0 |
 | F6 Modelo final e latência | 15 | 0% | 0.0 |
 | F7 Consolidação e entrega | 19 | 0% | 0.0 |
-| **Macro** | **100** | | **25.75%** |
+| **Macro** | **100** | | **32.5%** |
 
 ---
 
@@ -657,3 +657,45 @@ pendente — falta o badge no README e uma run limpa confirmando cache OK.
 
 Caixas: 2/8 -> micro 25%. Macro: 25,75%. Próxima ação: caixa 4.2 (badge) ou
 seguir direto pra 4.5 (DAG) — a decidir.
+
+### NOTA — 2026-09-14 (7)
+
+Caixas 4.5 e 4.7 fechadas. `airflow/dags/retrain_dag.py`: 5 tasks
+(`ingest → preprocess → train → evaluate → register`), TaskFlow API do
+Airflow 3 (`from airflow.sdk import dag, task`), cada task só chama funções
+de `src/` (nenhuma lógica de negócio no arquivo da DAG, §12).
+
+Duas extensões em `src/` pra viabilizar `evaluate`/`register`:
+- `src/models/train.py`: `train_and_persist()` agora retorna `TrainResult`
+  (`artifact_path` + `run_id`), não só o path — precisava do `run_id` pra
+  `evaluate` conseguir reabrir o mesmo run do MLflow (`mlflow.start_run(run_id=...)`)
+  e logar as métricas de teste no mesmo registro do treino. `test_train.py`
+  e o smoke test de `test_api.py` ajustados.
+- `src/models/evaluate.py`: nova função `evaluate_pipeline()` — carrega
+  `data/processed/test.csv` (reservado desde F1, nunca tocado até agora) e
+  calcula as mesmas métricas de F2, mas no held-out real. Teste novo em
+  `tests/test_evaluate.py`.
+
+**Achado de ferramenta:** `airflow dags test` tem um bug nesta versão
+(3.2.2) — `AttributeError: 'State' object has no attribute 'svcs_registry'`
+no supervisor de execução interna, falha na primeira task antes até de
+rodar nosso código. Sem relato conhecido buscado. Contornado: subi o stack
+completo (`airflow standalone`, o mesmo já validado no NV-5) e disparei via
+`airflow dags trigger` contra o scheduler real — esse caminho funciona limpo.
+Também precisei resetar o banco de metadados uma vez (`rm airflow.db*` +
+`db migrate` com `AIRFLOW__CORE__LOAD_EXAMPLES=False`): a run anterior do
+NV-5 tinha carregado DAGs de exemplo com um timetable customizado que não
+resolve fora do contexto do scheduler, quebrando `dags list`.
+
+**Execução real:** `manual__2026-09-14T12:42:31.738819+00:00`, 5/5 tasks
+`success`, ~41s ponta a ponta. Evidência completa (estado por task, logs de
+aplicação, achado científico) em `docs/evidence/f4_dag_execucao_2026-09-14.md`.
+Achado científico: primeira avaliação real no teste reservado (2.245 linhas)
+bateu perto da estimativa de CV de F2 — F1-macro 0,728 (CV: 0,731), ROC-AUC
+0,878 (CV: 0,877), recall `urgente` 0,769 (CV: 0,796) — sinal de que a CV
+não estava otimista demais. Modelo registrado no MLflow Model Registry
+(`triagem-urgencia`, versão 1), **sem promoção de stage** — critério de
+promoção é ADR-0008 (F6), fora do escopo de F4.
+
+Caixas: 4/8 -> micro 50%. Macro: 32,5%. Próxima ação: caixa 4.2 (badge) ou
+4.4/4.6 (RUNBOOK do Airflow + ADR-0008 + parametrização) — a decidir.

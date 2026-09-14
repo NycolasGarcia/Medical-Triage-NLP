@@ -1,6 +1,7 @@
 """Métricas de avaliação do classificador de urgência (F1 por classe, custo FP/FN)."""
 
 import numpy as np
+import pandas as pd
 from sklearn.metrics import confusion_matrix, f1_score, recall_score, roc_auc_score
 
 from src.data.labels import URGENCY_CLASSES
@@ -40,3 +41,13 @@ def count_sub_over_triage(y_true, y_pred) -> dict[str, int]:
         "sobre_triagem": int((diff > 0).sum()),
         "acerto_exato": int((diff == 0).sum()),
     }
+
+
+def evaluate_pipeline(pipeline, test_path: str = "data/processed/test.csv") -> dict[str, float]:
+    """Avalia um pipeline treinado no teste reservado (nunca visto em CV/treino)."""
+    test = pd.read_csv(test_path)
+    y_true, y_pred = test["urgency_label"], pipeline.predict(test["text"])
+    y_proba = pipeline.predict_proba(test["text"])
+    metrics = compute_metrics(y_true, y_pred, y_proba)
+    triage = count_sub_over_triage(y_true, y_pred)
+    return {**metrics, **{f"triage_{k}": v for k, v in triage.items()}}

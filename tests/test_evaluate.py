@@ -2,7 +2,13 @@
 
 import numpy as np
 
-from src.models.evaluate import compute_metrics, confusion_matrix_3x3, count_sub_over_triage
+from src.models.evaluate import (
+    compute_metrics,
+    confusion_matrix_3x3,
+    count_sub_over_triage,
+    evaluate_pipeline,
+)
+from src.models.train import build_pipeline
 
 
 def test_count_sub_over_triage():
@@ -44,3 +50,16 @@ def test_compute_metrics_retorna_ao_menos_quatro_metricas():
     assert len(metrics) >= 4
     assert 0.0 <= metrics["f1_macro"] <= 1.0
     assert metrics["recall_urgente"] == 1.0
+
+
+def test_evaluate_pipeline_retorna_metricas_e_contagem_de_triagem(sample_train_csv):
+    import pandas as pd
+
+    train = pd.read_csv(sample_train_csv)
+    pipeline = build_pipeline()
+    pipeline.fit(train["text"], train["urgency_label"])
+
+    metrics = evaluate_pipeline(pipeline, test_path=str(sample_train_csv))
+
+    assert "f1_macro" in metrics
+    assert {"triage_sub_triagem", "triage_sobre_triagem", "triage_acerto_exato"} <= metrics.keys()
