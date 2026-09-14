@@ -9,9 +9,9 @@ snapshot numérico, as evidências e o veredito.
 | Campo | Valor |
 |---|---|
 | Fase atual | F4 — CI/CD e orquestração |
-| Micro (fase) | 0% |
-| Macro (rubrica coberta) | 19,0% |
-| Último checkpoint | 2026-09-14 — F3 fechada 10/10, todos os hard requirements ok |
+| Micro (fase) | 25% (2/8) |
+| Macro (rubrica coberta) | 25,75% |
+| Último checkpoint | 2026-09-14 — caixas 4.1 e 4.3 fechadas (CI real verde: lint+test+build) |
 | Bloqueios | Nenhum conhecido |
 
 ## Progresso macro por fase
@@ -22,11 +22,11 @@ snapshot numérico, as evidências e o veredito.
 | F1 Dados e EDA | 4 | 100% | 4.0 |
 | F2 Baselines | 5 | 100% | 5.0 |
 | F3 API e container | 7 | 100% | 7.0 |
-| F4 CI/CD e Airflow | 27 | 0% | 0.0 |
+| F4 CI/CD e Airflow | 27 | 25% | 6.75 |
 | F5 Monitoramento | 20 | 0% | 0.0 |
 | F6 Modelo final e latência | 15 | 0% | 0.0 |
 | F7 Consolidação e entrega | 19 | 0% | 0.0 |
-| **Macro** | **100** | | **19.0%** |
+| **Macro** | **100** | | **25.75%** |
 
 ---
 
@@ -637,3 +637,23 @@ Caixas: 0/8 ainda -> micro 0%. Macro segue 19,0% (sem mudança) — caixa só
 fecha com CI real verde no GitHub Actions, não com validação local (§10.1:
 caixa marcada sem artefato verificável é pior que caixa desmarcada). Próxima
 ação: push e confirmar os 3 jobs verdes de verdade.
+
+### NOTA — 2026-09-14 (6)
+
+Push feito (`86a9117`), CI real conferido: **run 34836927538, os 3 jobs
+verdes** — `lint` 13s, `test` 45s (`dvc repro` reconstruiu os dados do zero
+no runner e `pytest --cov` passou, schema test sem skip), `build` 1m1s
+(`dvc repro` + `train.py` + `docker build` da imagem completa). Conferi o
+log real do job `test` linha a linha — o relatório de cobertura aparece
+certo (68% local, mesmo shape no CI).
+
+Caixas 4.1 e 4.3 fechadas com evidência real (não só local). Achado sem
+ação necessária: cache do `astral-sh/setup-uv` falhou nesta run por
+instabilidade do lado do GitHub ("Our services aren't available right now"
++ "Cache service responded with 400") — não é problema de configuração
+nossa, `enable-cache: true` já está certo nos 3 jobs; só não deu pra
+confirmar o ganho de velocidade ainda. Caixa 4.2 (cache + badge) segue
+pendente — falta o badge no README e uma run limpa confirmando cache OK.
+
+Caixas: 2/8 -> micro 25%. Macro: 25,75%. Próxima ação: caixa 4.2 (badge) ou
+seguir direto pra 4.5 (DAG) — a decidir.
