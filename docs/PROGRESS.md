@@ -8,10 +8,10 @@ snapshot numérico, as evidências e o veredito.
 
 | Campo | Valor |
 |---|---|
-| Fase atual | F3 — API, container e decisão arquitetural |
-| Micro (fase) | 90% (9/10) |
-| Macro (rubrica coberta) | 18,3% |
-| Último checkpoint | 2026-09-14 — caixas 3.8–3.9 fechadas (README + ARCHITECTURE.md) |
+| Fase atual | F4 — CI/CD e orquestração |
+| Micro (fase) | 0% |
+| Macro (rubrica coberta) | 19,0% |
+| Último checkpoint | 2026-09-14 — F3 fechada 10/10, todos os hard requirements ok |
 | Bloqueios | Nenhum conhecido |
 
 ## Progresso macro por fase
@@ -21,12 +21,12 @@ snapshot numérico, as evidências e o veredito.
 | F0 Scaffolding | 3 | 100% | 3.0 |
 | F1 Dados e EDA | 4 | 100% | 4.0 |
 | F2 Baselines | 5 | 100% | 5.0 |
-| F3 API e container | 7 | 90% | 6.3 |
+| F3 API e container | 7 | 100% | 7.0 |
 | F4 CI/CD e Airflow | 27 | 0% | 0.0 |
 | F5 Monitoramento | 20 | 0% | 0.0 |
 | F6 Modelo final e latência | 15 | 0% | 0.0 |
 | F7 Consolidação e entrega | 19 | 0% | 0.0 |
-| **Macro** | **100** | | **18.3%** |
+| **Macro** | **100** | | **19.0%** |
 
 ---
 
@@ -522,3 +522,46 @@ atualizada (0001/0002/0003 aceitos, 0004/0005/0008 ainda planejados).
 
 Caixas: 9/10 -> micro 90%. Macro: 18,3%. Falta só 3.10 (CHECKPOINT de
 fechamento de F3).
+
+### CHECKPOINT — F3 «API, container e decisão arquitetural» · fechamento · 2026-09-14
+
+HARD REQUIREMENTS DA FASE
+- HR-3.1 API funcional em container -> ok (`docker run` do zero, `/health` e
+  `/predict` testados contra a imagem publicada)
+- HR-3.2 latência baseline medida com protocolo -> ok (N=1000, warmup=100, 3
+  repetições, `docs/LATENCY.md`)
+- HR-3.3 ADR-0002 aceito e resumido no README -> ok (`docs/adr/0002-...md`
+  status aceito; `README.md` § Arquitetura de deploy)
+- HR-3.4 ≥ 3 testes verdes -> ok (`tests/test_api.py`, 3 testes; suíte 28/28)
+
+PORTÕES NUMÉRICOS
+
+| Portão | Alvo | Medido | Status |
+|---|---|---|---|
+| Container sobe do zero (`docker run`) | sim | sim | ok |
+| `/health` | < 50 ms | 1,66 ms | ok |
+| Baseline p50/p95 com N e warm-up | sim | p50 2,65 ms · p95 3,11 ms · N=1000 · warmup=100 | ok |
+| Tamanho da imagem medido e registrado | sim | 1,03 GB | ok (sem alvo numérico em F3) |
+| 3 testes verdes | sim | 28/28 | ok |
+| `ruff check .` | 0 erros | 0 erros | ok |
+
+ESTADO
+- Caixas da fase: 10/10 -> micro 100%
+- Macro: 19,0%
+- Rubrica tocada: R5 (parcial, 7%)
+
+SITUAÇÃO
+- Feito: API FastAPI completa (`/predict`, `/health`, middleware de latência/
+  log por requisição), modelo final treinado e persistido, `Dockerfile`
+  multi-stage funcional (build limpo, usuário não-root), latência baseline
+  medida dentro do container com protocolo declarado, ADR-0002 aceito
+  (real-time, AWS ECS/Fargate teórico, serverless descartado por cold start),
+  README criado com resumo da decisão, `ARCHITECTURE.md` reescrito com
+  diagramas mermaid reais (não mais aspiracionais).
+- Bloqueios / decisões pendentes do autor: nenhum.
+- Riscos observados: imagem de 1,03 GB pesada — decisão consciente de adiar
+  a separação treino/serving para F6, registrada em `LATENCY.md`; não
+  esquecer ao reabrir aquela fase.
+
+VEREDITO: **PODE AVANÇAR para F4** — todos os hard requirements de F3
+fechados, nenhuma exceção pendente.
