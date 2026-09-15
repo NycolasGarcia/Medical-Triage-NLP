@@ -1149,3 +1149,57 @@ SITUAÇÃO
 
 VEREDITO: **PODE AVANÇAR para F7** — todos os hard requirements de F6
 fechados, nenhuma exceção pendente.
+
+### F7 — caixa 7.7: auditoria final contra a rubrica (§3) · 2026-09-15
+
+Critério a critério, com caminho de evidência apontável — não "deve estar
+implementado", conferido.
+
+| # | Critério | Peso | Status | Evidência |
+|---|---|---|---|---|
+| R1 | Modelagem e Otimização | 20% | ✅ completo | Modelo funcional: `src/models/train.py` + `src/features/vectorize.py` (representação 6.1). ONNX: `src/optimization/onnx_export.py`, `docs/adr/0004-tecnica-otimizacao-latencia.md`. Ganho de latência com números: `docs/LATENCY.md` (p95 -58,3%, medido em container, N=1.000, 3 execuções). Paridade: `tests/test_onnx_parity.py` (verde) |
+| R2 | Monitoramento | 20% | ✅ completo | `docker-compose.yml` sobe API+Prometheus+Grafana — stack rodando e saudável ao vivo nesta sessão (>4h contínuas). Dashboard como código: `monitoring/grafana/provisioning/dashboards/triagem-urgencia.json`. Print com dado real: `docs/evidence/f5_grafana_dashboard_2026-09-15.png` (reconfirmado ao vivo hoje, mesmos 4 painéis populados) |
+| R3 | CI/CD | 15% | ✅ completo | `.github/workflows/ci.yml` (lint→test→build). Run mais recente (`35034624138`, push desta sessão): **3/3 jobs verdes**, incluindo `dvc repro`, treino, export ONNX e build da imagem dentro do próprio job de `build` |
+| R4 | Orquestração | 15% | ✅ completo | `airflow/dags/retrain_dag.py`. Evidência original: `docs/evidence/f4_dag_execucao_2026-09-14.md`. Revalidação após mudança de critério de promoção (ADR-0010): `docs/evidence/f7_dag_revalidacao_2026-09-15.md` — 5/5 tasks `success`, execução real via `airflow standalone`, não só import |
+| R5 | Documentação (README) | 15% | ✅ completo | `README.md` final (caixa 7.2): arquitetura (resumo + link para `docs/ARCHITECTURE.md`), setup, execução, monitoramento, resultados de latência, limitações. `docs/model_card.md` final (caixa 7.1) |
+| R6 | Vídeo STAR | 15% | ⚠️ **parcial** | Roteiro pronto e cronometrado: `docs/video_script.md` (caixa 7.5, ~662 palavras, ~4,4 min). **Gravação (caixa 7.6) pendente** — ação exclusiva do autor, fora do que esta sessão consegue executar (câmera/tela/voz) |
+
+**5 de 6 critérios com evidência completa e apontável. R6 tem metade do
+trabalho pronto (roteiro), a outra metade (gravação) é ação humana que não
+pode ser marcada como concluída sem ter sido feita de fato** — consistente
+com a disciplina do projeto ("caixa marcada sem artefato verificável é pior
+que caixa desmarcada").
+
+### CHECKPOINT — F7 «Consolidação e entrega» · fechamento parcial · 2026-09-15
+
+HARD REQUIREMENTS DA FASE
+- HR-7.1 os 6 critérios da rubrica com evidência apontável → parcial (5/6 —
+  ver auditoria acima; R6 falta a gravação em si)
+- HR-7.2 vídeo ≤ 5:00 cobrindo S/T/A/R → pendente (roteiro pronto, gravação não)
+- HR-7.3 instalação limpa validada do zero → ok (revisão end-to-end desta
+  sessão: `dvc repro`, retreino dos 2 backends, `docker compose up --build`,
+  testes — tudo do zero; reconfirmado no CI remoto, run `35034624138`)
+
+ESTADO
+- Caixas da fase: 7/8 → micro 87,5% (falta só 7.6, gravação)
+- Progresso macro: **97,6%** (81,0% herdado de F6 + 19,0 × 87,5% de F7)
+- Rubrica tocada por esta fase: R5 (4%) + R6 (15%)
+
+SITUAÇÃO
+- Feito: Model Card final (7.1), README final (7.2), histórico de commits
+  revisado sem achado (7.3), varredura final com CI real verde e DAG
+  revalidada após ADR-0010 (7.4), roteiro do vídeo cronometrado e escrito por
+  completo (7.5), auditoria final contra a rubrica com evidência apontável
+  por critério (7.7).
+- Falta: **caixa 7.6 — gravar o vídeo**. Isso é literalmente fora do que uma
+  sessão de código consegue fazer (não opera câmera, tela ou voz do autor) —
+  o roteiro (7.5), o que mostrar na tela e a stack toda já rodando e pronta
+  para a gravação (dashboard populado, CI verde, DAG com evidência) são a
+  parte que cabia a esta sessão preparar.
+- Bloqueios: nenhum técnico. O único item pendente do projeto inteiro depende
+  de uma ação humana específica (gravar e cortar o vídeo).
+
+VEREDITO: **NÃO FECHA em 100% — falta exclusivamente a caixa 7.6 (gravação do
+vídeo)**, ação do autor. Reabrir este checkpoint e marcar 7.8 assim que o
+vídeo existir como arquivo — nesse momento o macro fecha em 100% sem mais
+nenhuma pendência técnica.
