@@ -12,11 +12,16 @@ Como subir, operar e diagnosticar a stack. Base do README final.
 
 ```bash
 uv python install 3.11   # se ainda não tiver essa versão
-make setup                # uv sync — instala dependências a partir do lock
+make setup                # uv sync --group training — instala dependências a partir do lock
 cp .env.example .env
 make lint                 # ruff
 make test                 # pytest
 ```
+
+`mlflow`/`lightgbm`/`mord` ficam num grupo de dependência separado (`training`,
+mesmo padrão do `orchestration` do Airflow) — usados só em scripts de
+treino/experimentação, nunca pela API. `make setup` já inclui o grupo; a imagem
+Docker (`uv sync --no-dev`) não — ver ADR-0004.
 
 Se `uv: comando não encontrado`: instalar com
 `wget -qO- https://astral.sh/uv/install.sh | sh` (ou `curl -LsSf ... | sh` se
@@ -40,8 +45,22 @@ Ou reconfigurar o remote para outro caminho: `dvc remote modify local-storage ur
 ## Treinar o modelo
 
 ```bash
-make train          # treino local, registra run no MLflow
+make train          # treino local, registra run no MLflow (backend sklearn)
+make train-onnx     # exporta a variante ONNX (caixa 6.6/ADR-0004)
 ```
+
+## Alternar o backend de inferência (caixa 6.9/ADR-0004)
+
+```bash
+MODEL_BACKEND=sklearn make run    # padrão — pipeline completo de 6.1-6.4, melhor qualidade
+MODEL_BACKEND=onnx make run       # mais rápido (~-58% no p95), representação mais simples
+```
+
+Em container: variável de ambiente `MODEL_BACKEND` no `docker run`/`docker-compose.yml`.
+Os dois artefatos (`model.joblib` e `model.onnx`+`onnx_calibrator.joblib`) precisam
+existir em `models/current/` antes — `make train && make train-onnx` gera os dois.
+Ver `docs/LATENCY.md` para os números completos e `docs/adr/0004-tecnica-
+otimizacao-latencia.md` para o porquê da diferença de qualidade entre os backends.
 
 ## Subir a stack de monitoramento
 
@@ -77,8 +96,12 @@ pro gráfico de "Total de requisições" mostrar mais de uma série.
 ## Benchmark de latência
 
 ```bash
-make bench          # segue o protocolo de docs/LATENCY.md
+make bench          # segue o protocolo de docs/LATENCY.md, mede o backend ativo
 ```
+
+Para comparar os dois backends (como em `docs/LATENCY.md`): subir o container com
+`MODEL_BACKEND=sklearn`, rodar `uv run python -m scripts.benchmark --base-url
+<url> --n 1000 --warmup 100`, repetir com `MODEL_BACKEND=onnx`.
 
 ## Airflow
 
@@ -139,6 +162,8 @@ execução, já validado ponta a ponta — evidência em
 | `dags list` quebra com `TimetableNotRegistered` | Banco de metadados tem DAGs de exemplo de uma execução anterior com `load_examples` ligado | `rm airflow/airflow.db*` + `airflow db migrate` com `AIRFLOW__CORE__LOAD_EXAMPLES=False` já exportado |
 | `airflow dags test` falha com `svcs_registry` | Bug do supervisor de execução no Airflow 3.2.2 | Não usar `dags test` — `airflow standalone` + `dags trigger` (ver seção Airflow) |
 | Modelo não carrega na API | Caminho/versão do artefato | Conferir `.env` e o artefato em `models/` |
+| `MODEL_BACKEND=onnx` falha no startup com erro de `StringNormalizer`/locale | Imagem sem locale UTF-8 instalado (`python:3.11-slim`) | Já corrigido no `Dockerfile` (`locales` + `locale-gen en_US.UTF-8`, ADR-0004); se usar outra base image, replicar |
+| `MODEL_BACKEND=onnx` falha com `FileNotFoundError` em `model.onnx` | Artefato ONNX nunca foi exportado | `make train-onnx` antes de subir com esse backend |
 
 ## Parar tudo
 

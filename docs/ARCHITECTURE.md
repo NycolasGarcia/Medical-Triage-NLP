@@ -22,6 +22,7 @@ orquestrado e observabilidade local.
 | Grafana | Grafana 11.1 | 3000 | Dashboard provisionado como código (4 painéis) | **implementado (F5)** |
 | Orquestrador | Airflow 3.2 | 8080 | DAG `retrain_triage_model`: ingest→preprocess→train→evaluate→register | **implementado (F4)** |
 | Tracking | MLflow | 5000 (UI local) | Experimentos e Model Registry | tracking + registro de versão **em uso (F2-F4)**; promoção de stage planejada (F6) |
+| Runtime alternativo | ONNX Runtime | 8000 (mesma API) | Backend `onnx` opt-in (`MODEL_BACKEND`), latência menor, representação mais simples | **implementado (F6, ADR-0004)** |
 
 ## 3. Fluxo de inferência (implementado em F3)
 
@@ -46,6 +47,13 @@ flowchart LR
     ME --> P
     P --> G[Grafana: dashboard provisionado]
 ```
+
+Diagrama acima é o backend padrão (`MODEL_BACKEND=sklearn`). Com
+`MODEL_BACKEND=onnx` (caixa 6.6/ADR-0004), os passos `VEC`+`CLF` são substituídos
+por: `ONNX Runtime.run()` (vetorização + regressão logística, representação mais
+simples — só bigramas de palavra) seguido de `OneVsRestIsotonicCalibrator.transform()`
+em Python puro (calibração equivalente, fora do grafo ONNX) — `THR` (limiar) e o
+resto do fluxo não mudam. Ver `src/api/model_runtime.py`.
 
 **Startup (não por requisição):** o `lifespan` do FastAPI carrega
 `models/current/model.joblib` (pipeline `FeatureUnion` — TF-IDF de palavra
@@ -120,6 +128,6 @@ decisão consciente registrada em `docs/model_card.md` (limitação 2), não bug
 | 0001 | Mapeamento de classes para urgência | aceito |
 | 0002 | Arquitetura de deploy (batch vs. real-time) | aceito |
 | 0003 | Modelo base | aceito |
-| 0004 | Técnica de otimização de latência | planejado (F6) |
+| 0004 | Técnica de otimização de latência | aceito |
 | 0005 | Matriz de custo e política de limiar | aceito |
 | 0008 | Estratégia de retreino e critério de promoção | aceito |

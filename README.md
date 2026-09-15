@@ -20,11 +20,11 @@ Detalhes:
 
 [![CI](https://github.com/NycolasGarcia/Medical-Triage-NLP/actions/workflows/ci.yml/badge.svg)](https://github.com/NycolasGarcia/Medical-Triage-NLP/actions/workflows/ci.yml)
 ![Version](https://img.shields.io/badge/version-0.1.0-darkgrey?style=flat)
-![Tests](https://img.shields.io/badge/tests-72%20passing-brightgreen?style=flat)
-![Coverage](https://img.shields.io/badge/coverage-64%25-yellow?style=flat)
+![Tests](https://img.shields.io/badge/tests-77%20passing-brightgreen?style=flat)
+![Coverage](https://img.shields.io/badge/coverage-63%25-yellow?style=flat)
 ![Ruff](https://img.shields.io/badge/ruff-passing-brightgreen?style=flat)
-![F1 Macro](https://img.shields.io/badge/F1--macro%20(teste)-0.728-blue?style=flat)
-![Recall Urgente](https://img.shields.io/badge/recall%20urgente%20(teste)-0.769-blue?style=flat)
+![F1 Macro](https://img.shields.io/badge/F1--macro%20(teste)-0.523-blue?style=flat)
+![Recall Urgente](https://img.shields.io/badge/recall%20urgente%20(teste)-0.880-blue?style=flat)
 
 </div>
 
@@ -119,6 +119,30 @@ comparados sob a mesma validação cruzada de 5 dobras
 > custo de F6 existir. Diferença pequena entre CV e teste reservado (< 3 pontos em
 > tudo) é bom sinal de generalização, não coincidência forçada.
 
+### F6 — pipeline final (representação + calibração + limiar de custo)
+
+A tabela acima é F2: modelo escolhido, sem as técnicas de F6. O pipeline que a API
+serve por padrão hoje é mais além — representação tunada (bigramas + char
+n-gramas + marcação de negação, [EXPERIMENTS.md](docs/EXPERIMENTS.md)), calibração
+isotônica ([EXPERIMENTS.md](docs/EXPERIMENTS.md)) e limiar de decisão enviesado
+contra sub-triagem via matriz de custo explícita
+([ADR-0005](docs/adr/0005-matriz-custo-politica-limiar.md)):
+
+| Métrica (teste reservado) | Antes de F6 (argmax, TF-IDF simples) | Depois de F6 (limiar tunado) |
+|---|---|---|
+| Recall `urgente` | 0,769 | **0,880** |
+| Custo médio (matriz §7) | 1,290 | **0,672** (-48%) |
+| Sub-triagem | ~10,8% | **4,3%** |
+| F1 macro | 0,728 | 0,523 |
+
+**F1-macro caiu — de propósito, não é regressão.** O limiar tunado troca
+deliberadamente qualidade agregada por menos sub-triagem (o erro que importa neste
+domínio, §7): o recall de `normal` desaba para 0,04 como efeito colateral
+matematicamente esperado da assimetria de custo (sub-triagem custa 5-15×
+sobre-triagem) — analisado em detalhe, com exemplos reais lidos manualmente, em
+[docs/error_analysis.md](docs/error_analysis.md) e na decisão final do autor
+registrada em [ADR-0005](docs/adr/0005-matriz-custo-politica-limiar.md).
+
 ## Pipeline
 
 ```mermaid
@@ -151,6 +175,7 @@ flowchart LR
 | Orquestração | Apache Airflow ≥ 3.2 | DAG `retrain_triage_model`: ingest → preprocess → train → evaluate → register |
 | API | FastAPI + Uvicorn, Pydantic | `/health`, `/predict`, `/metrics`, middleware de latência |
 | Métricas | `prometheus_client` | Contadores/histograma expostos em `/metrics` |
+| Otimização de latência | ONNX Runtime + skl2onnx | Backend `onnx` opt-in, -58,3% no p95 (ADR-0004) |
 | Monitoramento | Prometheus 2.53 + Grafana 11.1 | Scrape 5s + dashboard provisionado como código (4 painéis) |
 | Validação de dados | pandera | Schema do dataset processado |
 | Logging | JSON estruturado | Sem `print()` em nenhum módulo |
@@ -167,8 +192,8 @@ flowchart LR
 git clone https://github.com/NycolasGarcia/Medical-Triage-NLP.git
 cd Medical-Triage-NLP
 
-# 2. Instalar dependências (uv)
-uv sync
+# 2. Instalar dependências (uv) — inclui o grupo `training` (mlflow/lightgbm/mord)
+make setup
 
 # 3. Configurar ambiente
 cp .env.example .env
@@ -176,18 +201,20 @@ cp .env.example .env
 # 4. Baixar e processar o dataset (sem credencial — fonte pública)
 uv run dvc repro
 
-# 5. Treinar e persistir o modelo final
+# 5. Treinar e persistir os dois backends (sklearn padrão + onnx opcional)
 make train
+make train-onnx
 ```
 
 ## Quick Start
 
 ```bash
 make lint            # ruff check
-make test            # pytest (37 testes)
+make test            # pytest (77 testes)
 
 make run             # API com reload -> http://localhost:8000/docs
-make train            # treina e persiste o modelo vencedor
+make train            # treina e persiste o backend sklearn (padrão)
+make train-onnx       # exporta o backend onnx (opt-in, ver ADR-0004)
 make bench            # benchmark de latência (docs/LATENCY.md)
 
 make stack-up         # API + Prometheus + Grafana -> http://localhost:3000
@@ -200,10 +227,11 @@ make load-test         # gera tráfego pra popular o dashboard
 
 | Comando | O que faz |
 |---|---|
-| `make setup` | `uv sync` + `pre-commit install` |
+| `make setup` | `uv sync --group training` + `pre-commit install` |
 | `make lint` | `ruff check .` |
 | `make test` | Suíte pytest completa |
-| `make train` | Treina e persiste o modelo final (`src/models/train.py`) |
+| `make train` | Treina e persiste o backend `sklearn` (`src/models/train.py`) |
+| `make train-onnx` | Exporta o backend `onnx` (`src/optimization/onnx_export.py`) |
 | `make run` | Sobe a API local com reload (`uvicorn`) |
 | `make bench` | Benchmark de latência do `/predict` (`scripts/benchmark.py`) |
 | `make stack-up` / `stack-down` | `docker compose up -d` / `down` — API + Prometheus + Grafana |
@@ -220,11 +248,14 @@ curl localhost:8000/health   # ou: http://localhost:8000/docs
 ```
 
 `Dockerfile` multi-stage (builder com `uv sync --no-dev` + runtime `python:3.11-slim`,
-usuário não-root, `HEALTHCHECK` contra `/health`). Imagem atual: 1,03 GB — pesada
-para TF-IDF+LogReg sozinho; achado registrado em
-[docs/LATENCY.md](docs/LATENCY.md) (separar dependências de treino/serving é
-trabalho planejado para F6). Latência medida dentro do container: **p50 2,65 ms
-· p95 3,11 ms** (protocolo completo em `docs/LATENCY.md`).
+usuário não-root, `HEALTHCHECK` contra `/health`). Imagem atual: **696 MB** (era
+1,03 GB em F3 — dependências de treino/experimentação, `mlflow`/`lightgbm`/`mord`,
+separadas do serving em F6/ADR-0004, ver [docs/LATENCY.md](docs/LATENCY.md)).
+Latência medida dentro do container (backend `sklearn`, padrão): **p50 6,47 ms ·
+p95 7,01 ms**; backend `onnx` (`MODEL_BACKEND=onnx`, ver
+[ADR-0004](docs/adr/0004-tecnica-otimizacao-latencia.md)): **p50 2,57 ms · p95
+2,92 ms** (**-58,3%**) — protocolo completo e trade-off de qualidade em
+`docs/LATENCY.md`.
 
 ## Monitoramento
 
@@ -378,9 +409,10 @@ medical-triage-nlp/
   - [x] `docker-compose.yml` (API + Prometheus + Grafana), os 3 serviços `healthy`
   - [x] Dashboard Grafana provisionado como código (4 painéis), gerador de carga, print com dado real
 - [ ] **Etapa 4 — Otimização de Latência e Entrega**
-  - [ ] Matriz de custo assimétrica + ajuste de limiar (ADR-0005), calibração de probabilidade
-  - [ ] Export ONNX + benchmark comparativo, promoção do modelo no Registry (ADR-0008)
-  - [ ] Model Card final, README final, vídeo STAR
+  - [x] Tuning de representação (ADR implícito em EXPERIMENTS.md) + calibração isotônica (Brier/ECE medidos)
+  - [x] Matriz de custo assimétrica + ajuste de limiar por classe (ADR-0005), análise qualitativa de erros
+  - [x] Export ONNX + benchmark comparativo (-58,3% no p95), backend alternável por flag (ADR-0004)
+  - [ ] Promoção do modelo no Registry (ADR-0008), Model Card final, README final, vídeo STAR
 
 Progresso completo (checkpoints, portões numéricos, evidências) em
 [docs/PROGRESS.md](docs/PROGRESS.md).

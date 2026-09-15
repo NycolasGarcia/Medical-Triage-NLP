@@ -1006,3 +1006,52 @@ custo — resposta registrada aqui, decisão final ainda com o autor).
   sobre-triagem mas não eliminaria essa segunda categoria de erro.
 - Pendente para o fechamento de F6: caixas 6.6 a 6.11 — e a decisão do autor
   sobre reabrir ou não a matriz de custo, informada por esta análise.
+
+### F6 — decisão do autor sobre a matriz de custo · 2026-09-15
+
+Autor revisou `docs/error_analysis.md` e decidiu **manter a matriz de custo como
+está** — reabri-la resolveria só a causa reversível (assimetria do limiar), não o
+teto de qualidade do mapeamento de rótulo (causa dominante do recall baixo de
+`normal`). Registrado em ADR-0005, seção "Revisão do autor".
+
+### F6 — caixas 6.6-6.9 (ONNX, paridade, latência, flag da API) · execução · 2026-09-15
+
+Testado diretamente (não assumido) se o pipeline vencedor de 6.1-6.4 convertia
+para ONNX — não convertia, por 3 limitações reais do `skl2onnx`: preprocessador
+Python customizado (marcação de negação), `analyzer="char_wb"` (char n-gramas) e
+`CalibratedClassifierCV` exigindo entrada numérica (não aceita pipeline de texto).
+
+- Decisão: duas variantes servíveis via `MODEL_BACKEND` (`sklearn` padrão,
+  `onnx` opt-in) — ver **ADR-0004 aceito**, com o diagnóstico completo e as
+  alternativas descartadas.
+- Calibração preservada no backend ONNX apesar do bloqueio do
+  `CalibratedClassifierCV`: `OneVsRestIsotonicCalibrator`
+  (`src/optimization/calibrator.py`), calibrador isotônico manual rodando em
+  Python fora do grafo ONNX. Achado ao validar essa peça: sklearn calibra por
+  padrão sobre `decision_function`, não `predict_proba` — confirmado
+  empiricamente comparando as duas (bateram byte a byte usando
+  `decision_function`); o calibrador manual usa `predict_proba` conscientemente
+  (é o que o runtime ONNX expõe), documentado no docstring da classe.
+- Resultado de latência (container, mesmo protocolo do baseline de F3, 3
+  execuções de N=1.000): p95 original (sklearn) 7,01 ms → p95 otimizado (ONNX)
+  2,92 ms — **-58,3%**. Tamanho de artefato -67% (2,4 MB → 0,79 MB).
+- Achado colateral fechado nesta caixa (estava explicitamente adiado desde F3
+  em `docs/LATENCY.md`, "não esquecer ao reabrir F6"): `mlflow`/`lightgbm`/`mord`
+  moveram de `dependencies` para um grupo `training` separado — não são usados
+  por `src/api/`, só por scripts de treino/experimentação. Imagem Docker caiu de
+  1,03 GB para 696 MB (-32,4%), confirmado com build real, não estimativa.
+  `Makefile`/CI atualizados (`uv sync --group training`) para não quebrar
+  `make setup`/testes.
+- Achado ao testar o backend ONNX em **container** (não local): operador
+  `StringNormalizer` do onnxruntime falha sem locale UTF-8 instalado — a imagem
+  `python:3.11-slim` não vem com nenhum. Corrigido no Dockerfile (`locales` +
+  `locale-gen en_US.UTF-8`). Não aparecia rodando local porque o locale do host
+  mascarava o problema — só apareceu com a validação real em container.
+- `tests/test_onnx_parity.py`: tolerância declarada de 0,05 de diferença
+  absoluta por probabilidade, baseada em medição real (300 amostras: diferença
+  média 0,0024, máxima 0,0316); concordância de rótulo 99,4% em 1.000 amostras.
+- Evidência: `docs/LATENCY.md` atualizado com os números completos e a seção de
+  trade-off de qualidade; 8 testes novos (`test_calibrator.py`,
+  `test_onnx_parity.py`) — suíte em 77/77 verde.
+- Pendente para o fechamento de F6: caixa 6.10 (promoção no MLflow Registry) e
+  6.11 (checkpoint de fechamento).
