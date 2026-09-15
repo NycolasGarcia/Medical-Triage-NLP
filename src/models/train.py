@@ -10,7 +10,7 @@ import pandas as pd
 from sklearn.pipeline import Pipeline
 
 from src.config import settings
-from src.features.vectorize import TfidfStrategy
+from src.features.vectorize import PRODUCTION_REPRESENTATION, build_representation
 from src.logging_config import configure_logging, get_logger
 from src.models.factory import build_model
 from src.models.tracking import configure_tracking
@@ -27,8 +27,14 @@ class TrainResult:
 
 
 def build_pipeline() -> Pipeline:
-    """Vetorizador + classificador num único artefato exportável."""
-    return Pipeline([("tfidf", TfidfStrategy().build()), ("clf", build_model(FINAL_MODEL_NAME))])
+    """Representação + classificador num único artefato exportável. Representação
+    é a vencedora da caixa 6.1 (`PRODUCTION_REPRESENTATION`, ver `vectorize.py`)."""
+    return Pipeline(
+        [
+            ("features", build_representation(PRODUCTION_REPRESENTATION)),
+            ("clf", build_model(FINAL_MODEL_NAME)),
+        ]
+    )
 
 
 def train_and_persist(
@@ -47,7 +53,13 @@ def train_and_persist(
     configure_tracking()
     with mlflow.start_run(run_name="final_train_logreg") as run:
         mlflow.log_params({"model": FINAL_MODEL_NAME, "n_samples": len(train), "adr": "0003"})
-        mlflow.sklearn.log_model(pipeline, name="model")
+        # skops (serialização padrão do mlflow.sklearn) recusa por padrão qualquer
+        # callable que não seja de uma lib conhecida — `mark_negation` (caixa 6.1)
+        # é nossa própria função, determinística e sem I/O; confiança explícita,
+        # não um bypass geral de segurança (achado ao rodar os testes desta caixa).
+        mlflow.sklearn.log_model(
+            pipeline, name="model", skops_trusted_types=["src.features.negation.mark_negation"]
+        )
         run_id = run.info.run_id
 
     logger.info("modelo_persistido", extra={"path": str(artifact_path), "n_samples": len(train)})
