@@ -34,3 +34,13 @@ def test_predict_retorna_uma_das_tres_classes(client):
 def test_predict_payload_invalido_retorna_422(client):
     response = client.post("/predict", json={"text": ""})
     assert response.status_code == 422
+
+
+def test_metrics_expoe_formato_prometheus(client):
+    client.post("/predict", json={"text": "sem sinais de isquemia aguda"})
+
+    response = client.get("/metrics")
+
+    assert response.status_code == 200
+    assert "http_requests_total" in response.text
+    assert "predictions_total" in response.text
