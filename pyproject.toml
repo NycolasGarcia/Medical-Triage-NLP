@@ -10,6 +10,7 @@ dependencies = [
     "fastapi>=0.141.1",
     "lightgbm>=4.7.0",
     "mlflow>=3.16.0",
+    "mord>=0.7",
     "pandas>=3.0.5",
     "prometheus-client>=0.26.0",
     "pydantic-settings>=2.0",

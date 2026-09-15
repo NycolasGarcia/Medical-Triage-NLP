@@ -2230,6 +2230,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "lightgbm" },
     { name = "mlflow" },
+    { name = "mord" },
     { name = "pandas" },
     { name = "prometheus-client" },
     { name = "pydantic-settings" },
@@ -2259,6 +2260,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.141.1" },
     { name = "lightgbm", specifier = ">=4.7.0" },
     { name = "mlflow", specifier = ">=3.16.0" },
+    { name = "mord", specifier = ">=0.7" },
     { name = "pandas", specifier = ">=3.0.5" },
     { name = "prometheus-client", specifier = ">=0.26.0" },
     { name = "pydantic-settings", specifier = ">=2.0" },
@@ -2385,6 +2387,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/1e/0c/ca806be05530ffd01
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d3/e4/486d48d96fcb3957f2811e34d17fa21c7d3451eb4b41231832c9f05b6959/mlflow_tracing-3.16.0-py3-none-any.whl", hash = "sha256:383b920d5421f8f596a73bbc698f065ac62c4277146d2bdb2352096ec528bcb2", size = 1811849, upload-time = "2026-09-04T05:00:58.786Z" },
 ]
+
+[[package]]
+name = "mord"
+version = "0.7"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/76/31/409cc737a998829d28e1dff5850d5a8c8263634fb6671def6b0566558433/mord-0.7.tar.gz", hash = "sha256:b60002734e33ca7fad9f94999c70b27fe038eb069cbd0fb08d6027c3d34a7bb3", size = 8634, upload-time = "2023-05-26T11:51:49.755Z" }
 
 [[package]]
 name = "more-itertools"
