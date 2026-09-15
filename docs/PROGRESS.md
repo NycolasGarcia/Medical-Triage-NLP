@@ -843,3 +843,46 @@ SITUAÇÃO
 
 VEREDITO: **PODE AVANÇAR para F6** — todos os hard requirements de F5
 fechados, nenhuma exceção pendente.
+
+### F6 — caixa 6.1 (tuning de representação) · execução · 2026-09-15
+
+Protocolo negociado com o autor antes de rodar: busca gulosa incremental
+(baseline → 4 candidatos isolados → incorpora vencedor, testa restantes em
+cima → repete até não haver ganho → checagem cirúrgica do 2º colocado →
+classificador ordinal como eixo separado), em vez de fatorial completo
+(2⁴ = 16 combinações) — orçamento máximo ~13 runs, parou em 12 (rodada 3
+sem ganho). Motivo da escolha: capturar interação entre técnicas (ex.:
+marcação de negação só ajuda combinada a char n-gramas, não sozinha — viu-se
+exatamente isso nos resultados) a um custo muito menor que testar todas as
+combinações.
+
+- Achado ao abrir a caixa: §10.6/ADR-0003 já tinham decidido bigramas (1,2)
+  para dar contexto à negação, nunca implementado (`TfidfStrategy` ficou em
+  unigrama desde F2). Virou parte da correção de baseline, não um 5º
+  candidato.
+- Config vencedora: bigramas de palavra + char n-gramas (3,5) + marcação de
+  negação, Regressão Logística. F1-macro CV 0,7338 (vs. 0,731 do TF-IDF
+  unigrama original de F2, vs. 0,7234 do baseline só com a correção de
+  bigramas — bigramas isolados **pioraram**, só compensam combinados com
+  char n-gramas).
+- Léxico de severidade e features estruturais: implementados, testados,
+  nunca venceram uma rodada — descartados da representação de produção,
+  código mantido e testado em `src/features/lexicon.py`/`structural.py`.
+- Classificador ordinal (`mord.LogisticAT`): testado sobre a representação
+  vencedora, F1-macro 0,566 — pior resultado da bateria inteira, inclusive
+  abaixo do `DummyClassifier` de F2 em recall de `urgente`. Descartado;
+  ADR-0003 atualizado (seção "Atualização — caixa 6.1") fechando a dívida
+  que constava como hipótese não testada.
+- Achado colateral (não do modelo, do pipeline): `mlflow.sklearn.log_model`
+  recusou serializar o pipeline via skops por causa do `mark_negation`
+  (callable customizado) — corrigido com `skops_trusted_types` explícito em
+  `src/models/train.py`, não com troca geral para pickle/cloudpickle.
+- Evidência: 12 runs no MLflow (experimento `triagem-urgencia`, prefixo
+  `f6_repr_*`), tabela completa e leitura em `docs/EXPERIMENTS.md` (seção
+  F6), 15 testes novos (`test_negation.py`, `test_lexicon.py`,
+  `test_structural.py`, `test_representation_tuning.py`) — suíte em 52/52
+  verde, cobertura 69%. `src/models/train.py` e `src/features/vectorize.py`
+  atualizados para servir a representação vencedora; `models/current/model.joblib`
+  retreinado de verdade com o pipeline novo (não só medido em CV) e checado
+  manualmente contra 3 laudos de exemplo.
+- Pendente para o fechamento de F6: caixas 6.2 a 6.11.

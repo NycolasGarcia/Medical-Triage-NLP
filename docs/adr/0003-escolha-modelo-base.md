@@ -101,3 +101,19 @@ passar a ser o critério dominante de seleção (não só F1-macro), reabrir est
 comparar a Regressão Logística com limiar ajustado contra o Multinomial NB com limiar
 ajustado — o NB pode virar vencedor sob uma política de custo explícita, mesmo perdendo
 em F1-macro cru. Se isso acontecer, este ADR é supersedido, não editado.
+
+## Atualização — caixa 6.1 (F6, 2026-09-15)
+
+A dívida aceita "classificador ordinal (`mord`) não foi de fato testado, só avaliado
+em tese" está fechada — não muda a decisão deste ADR (Regressão Logística segue como
+classificador de produção), por isso não abre ADR novo, só fecha o item em aberto.
+
+Testado (`mord.LogisticAT`) sobre a representação vencedora de caixa 6.1 (bigramas +
+char n-gramas + marcação de negação): F1-macro 0,566, recall de `urgente` 0,554 —
+pior resultado de toda a bateria de F6, inclusive abaixo do `DummyClassifier` de F2
+em recall de `urgente`. Hipótese mais provável (não confirmada): regularização L2
+padrão do `mord` (`alpha=1.0`) mal calibrada para as ~40 mil dimensões esparsas da
+representação vencedora — não é evidência de que classificação ordinal não serve
+para o problema, é evidência de que os hiperparâmetros padrão não servem nesta
+representação de alta dimensão. Ver `docs/EXPERIMENTS.md`, seção F6, para a tabela
+completa e a leitura dos 12 runs.

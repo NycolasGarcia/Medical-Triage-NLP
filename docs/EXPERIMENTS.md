@@ -72,3 +72,90 @@ o espelho legível dos runs, a justificativa fica no ADR.
 | LinearSVC (F2, primeira rodada) | Não produzia `predict_proba` nativamente — resolvido nesta rodada com `CalibratedClassifierCV` (candidato 6); a hipótese de que era competitivo se confirmou (0,723 F1-macro) |
 | `HistGradientBoostingClassifier` (sklearn) | Não aceita matriz esparsa — exigiria densificar TF-IDF (8.980×20.000 ≈ 1,4 GB por dobra), incompatível com o requisito de modelo leve. Ver ADR-0003 |
 | XGBoost | `uv add xgboost` instalou ~326 MB de dependências CUDA/NCCL (`nvidia-nccl-cu12`) mesmo para uso 100% CPU — contradiz a leveza exigida por R1. Substituído por LightGBM (3,3 MB, sem dependência de GPU). Ver ADR-0003 |
+
+## F6 — Tuning de representação (caixa 6.1)
+
+Busca gulosa incremental em vez de fatorial completo (2⁴ = 16 combinações) — decisão
+do autor de 2026-09-15 (`docs/PROGRESS.md`): baseline → cada candidato isolado contra
+o baseline → incorpora o vencedor da rodada, testa os restantes em cima → repete até
+não haver ganho → checagem cirúrgica do 2º colocado do round 1 combinado à config
+final → classificador ordinal (`mord`) como eixo separado, testado só por cima da
+representação vencedora. Orçamento máximo ~13 runs; parou em **12** (a rodada 3 não
+trouxe ganho, sem precisar da rodada 4).
+
+Classificador fixo em Regressão Logística (vencedora de F2) em todos os runs, exceto
+o último (eixo ordinal). Mesma CV de 5 dobras, seed 42, sobre `data/processed/train.csv`
+(8.980 amostras) — igual ao protocolo de F2.
+
+| Run | Config | F1 macro | F1 weighted | ROC-AUC OvR | Recall `urgente` | Sub-triagem % | Sobre-triagem % |
+|---|---|---|---|---|---|---|---|
+| `f6_repr_baseline` | bigramas (1,2), sem técnica extra | 0,7234 | 0,7260 | 0,8758 | 0,7855 | 12,2% | 15,0% |
+| `f6_repr_r1_negation` | + marcação de negação (isolada) | 0,7211 | 0,7237 | 0,8754 | 0,7826 | 12,2% | 15,1% |
+| `f6_repr_r1_severity_lexicon` | + léxico de severidade (isolado) | 0,7213 | 0,7239 | 0,8754 | 0,7833 | 12,2% | 15,1% |
+| `f6_repr_r1_structural` | + features estruturais (isolado) | 0,7221 | 0,7246 | 0,8754 | 0,7769 | 12,5% | 14,8% |
+| `f6_repr_r1_char_ngrams` | + char n-gramas (3,5) (isolado) — **vencedor round 1** | 0,7331 | 0,7356 | 0,8822 | 0,7915 | 11,9% | 14,3% |
+| `f6_repr_r2_negation` | char_ngrams + negação — **vencedor round 2 e da busca** | **0,7338** | **0,7363** | **0,8822** | 0,7915 | 11,9% | 14,2% |
+| `f6_repr_r2_severity_lexicon` | char_ngrams + léxico | 0,7322 | 0,7347 | 0,8820 | 0,7896 | 12,0% | 14,3% |
+| `f6_repr_r2_structural` | char_ngrams + estruturais | 0,7325 | 0,7350 | 0,8819 | 0,7896 | 12,0% | 14,3% |
+| `f6_repr_r3_severity_lexicon` | char_ngrams + negação + léxico | 0,7325 | 0,7350 | 0,8820 | 0,7925 | 11,9% | 14,4% |
+| `f6_repr_r3_structural` | char_ngrams + negação + estruturais | 0,7327 | 0,7352 | 0,8819 | 0,7887 | 12,1% | 14,2% |
+| `f6_repr_surgical_check` | idêntico ao round 3 (`structural` combinado à config final) | 0,7327 | 0,7352 | 0,8819 | 0,7887 | 12,1% | 14,2% |
+| `f6_repr_ordinal_mord` | vencedora + `mord.LogisticAT` em vez de LogReg | 0,5663 | 0,5694 | 0,7580 | 0,5544 | **21,6%** | 21,2% |
+
+### Leitura dos resultados
+
+**A correção do gap de §10.6 (bigramas nunca implementados em F2) sozinha piora o
+baseline**: 0,7234 contra 0,731 do TF-IDF unigrama original — achado relevante que
+não estava previsto. Bigramas isolados adicionam ruído dimensional sem contexto
+suficiente para compensar. Só voltam a valer a pena **combinados** com char n-gramas.
+
+**Char n-gramas (3,5) é a técnica isolada mais forte de longe** (0,7331 no round 1,
+contra 0,721-0,722 das outras três) — captura variação morfológica/subtoken
+(prefixos como `hyper-`/`hypo-`, sufixos `-itis`/`-oma`) que nem unigrama nem
+bigrama de palavra alcançam. Consistente com a literatura de classificação de texto
+biomédico.
+
+**Marcação de negação só ajuda depois do char n-grama**, não sozinha (round 1: 0,7211,
+pior que o próprio baseline) — evidência direta do risco de interação identificado
+antes de rodar: o ganho de marcar `shock_NEG` só aparece quando o char n-grama já
+captura submorfemas que se beneficiam de tokens distintos para a forma negada vs.
+afirmada. Testar via busca gulosa incremental (em vez de assumir o ganho isolado)
+capturou exatamente esse efeito.
+
+**Léxico de severidade e features estruturais nunca venceram uma rodada** — nem
+isolados, nem combinados. Hipótese: o léxico de 34 termos é pequeno demais frente a
+um vocabulário TF-IDF de até 20k+20k dimensões para mover a agulha, e as 3 features
+estruturais (contagem de tokens, densidade numérica, densidade de pontuação) são
+fracamente correlacionadas com urgência clínica real (mais um proxy plausível na
+teoria do que um sinal forte na prática, o que já era a dúvida original antes de
+implementar). Ambas ficam descartadas da representação de produção — código
+mantido em `src/features/lexicon.py` e `src/features/structural.py` (testado,
+reaproveitável se uma revisão futura do léxico mudar o resultado), mas fora do
+`PRODUCTION_REPRESENTATION` de `src/features/vectorize.py`.
+
+**Checagem cirúrgica não trouxe combinação nova**: o 2º colocado do round 1 fora da
+config final era `structural` — mas essa exata combinação (`char_ngrams + negação +
+structural`) já tinha sido testada no round 3 como candidata perdedora. O resultado
+bateu byte a byte com `f6_repr_r3_structural` (mesma seed, pipeline determinístico),
+o que confirma reprodutibilidade em vez de descobrir algo novo — artefato de haver
+só 4 candidatos, não falha do protocolo.
+
+**Classificador ordinal (`mord.LogisticAT`) teve o pior resultado de toda a
+bateria**, inclusive abaixo do Dummy de F2 em recall de `urgente` (0,554 contra 0,351
+do Dummy — pior que aleatório nessa métrica específica) e mais que dobrou a
+sub-triagem (21,6% contra ~12% dos candidatos de Regressão Logística). Hipótese mais
+provável: a regularização L2 padrão do `mord` (`alpha=1.0`) não foi pensada para
+~40 mil dimensões esparsas herdadas do char n-grama — não é evidência de que
+classificação ordinal não presta para o problema, é evidência de que os
+hiperparâmetros padrão não servem nesta representação de alta dimensão. Fica
+registrado como técnica testada e descartada nesta rodada (não hipótese, fato
+validado — diferença do que constava em ADR-0003), sem impedir uma futura reavaliação
+com regularização mais forte, se o tempo do projeto permitir.
+
+### Decisão
+
+`PRODUCTION_REPRESENTATION` (`src/features/vectorize.py`): bigramas de palavra (1,2)
++ char n-gramas (3,5) + marcação de negação, Regressão Logística. `src/models/train.py`
+atualizado para usar essa representação no artefato servido pela API. Ganho de
+F1-macro sobre o TF-IDF original de F2: **+0,0028** (0,731 → 0,7338) — modesto, mas
+real e medido em CV, não em uma única leitura de teste.
