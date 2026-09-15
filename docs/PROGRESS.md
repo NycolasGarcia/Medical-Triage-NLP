@@ -8,10 +8,10 @@ snapshot numérico, as evidências e o veredito.
 
 | Campo | Valor |
 |---|---|
-| Fase atual | F5 — Monitoramento e observabilidade |
+| Fase atual | F6 — Modelo final e otimização de latência |
 | Micro (fase) | 0% |
-| Macro (rubrica coberta) | 46,0% |
-| Último checkpoint | 2026-09-14 — F4 fechada 8/8, todos os hard requirements ok |
+| Macro (rubrica coberta) | 66,0% |
+| Último checkpoint | 2026-09-15 — F5 fechada 10/10, todos os hard requirements ok |
 | Bloqueios | Nenhum conhecido |
 
 ## Progresso macro por fase
@@ -23,10 +23,10 @@ snapshot numérico, as evidências e o veredito.
 | F2 Baselines | 5 | 100% | 5.0 |
 | F3 API e container | 7 | 100% | 7.0 |
 | F4 CI/CD e Airflow | 27 | 100% | 27.0 |
-| F5 Monitoramento | 20 | 0% | 0.0 |
+| F5 Monitoramento | 20 | 100% | 20.0 |
 | F6 Modelo final e latência | 15 | 0% | 0.0 |
 | F7 Consolidação e entrega | 19 | 0% | 0.0 |
-| **Macro** | **100** | | **46.0%** |
+| **Macro** | **100** | | **66.0%** |
 
 ---
 
@@ -784,4 +784,62 @@ SITUAÇÃO
   (decisão já registrada de adiar correção para F6).
 
 VEREDITO: **PODE AVANÇAR para F5** — todos os hard requirements de F4
+fechados, nenhuma exceção pendente.
+
+### CHECKPOINT — F5 «Monitoramento e observabilidade» · abertura e fechamento · 2026-09-15
+
+Fase executada e fechada na mesma sessão — abertura e fechamento combinados
+aqui (mesma prática já usada em F4 quando o trabalho saiu rápido e validado
+a cada passo).
+
+HARD REQUIREMENTS DA FASE
+- HR-5.1 compose sobe os 3 serviços saudáveis -> ok (`docker compose ps`:
+  api/prometheus/grafana todos `healthy`, `HEALTHCHECK` real nos 3)
+- HR-5.2 Prometheus com target UP -> ok (`/api/v1/targets`: `{'instance':
+  'api:8000', 'job': 'api'} up`)
+- HR-5.3 dashboard com ≥ 3 painéis populados -> ok (4 painéis, todos com
+  série temporal real após carga)
+- HR-5.4 dashboard versionado como código -> ok (JSON em
+  `monitoring/grafana/provisioning/dashboards/triagem-urgencia.json`,
+  commitado — print é evidência complementar, não a fonte)
+
+PORTÕES NUMÉRICOS
+
+| Portão | Alvo | Medido | Status |
+|---|---|---|---|
+| `docker compose up` → 3 serviços healthy | sim | sim | ok |
+| Target UP no Prometheus | sim | sim | ok |
+| ≥ 3 painéis com série temporal não vazia | sim | 4/4 | ok |
+| JSON do dashboard no repositório | sim | sim | ok |
+
+ESTADO
+- Caixas da fase: 10/10 -> micro 100%
+- Macro: 66,0%
+- Rubrica tocada: R2 (20%) — fase mapeia 1:1 com o critério
+
+SITUAÇÃO
+- Feito: `src/monitoring/metrics.py` (Counter de requisições, Histogram de
+  latência, Counter de erros, Counter de classe predita — métrica de
+  negócio), `/metrics` na API reaproveitando o middleware já existente (uma
+  só medição de latência, não duas). `docker-compose.yml` com os 3 serviços,
+  `monitoring/prometheus.yml` fazendo scrape de `api:8000` a cada 5s,
+  Grafana com datasource + dashboard provisionados como código (sem clicar
+  em nada). `scripts/load_test.py` (amostra texto real do teste, ~2% contra
+  `/health`) gerou a carga real da evidência. Print capturado via Playwright
+  headless (ferramenta ad-hoc desta sessão, não é dependência do projeto) —
+  login real no Grafana provisionado, screenshot do dashboard com dado de
+  verdade, salvo em `docs/evidence/f5_grafana_dashboard_2026-09-15.png`.
+- Achado corrigido no caminho: o painel de taxa de erro usava `sum(rate(...))`
+  puro, que fica "No data" quando a taxa de erro é genuinamente zero (Prometheus
+  não retorna série vazia como zero) — corrigido com `or vector(0)` na query,
+  e gerada uma leva de erros de propósito (payload inválido) pra a evidência
+  mostrar os dois casos, não só o caminho feliz.
+- `docs/ARCHITECTURE.md` e `README.md` atualizados por completo — componentes,
+  diagramas (inferência com `/metrics`→Prometheus→Grafana; treino com a DAG
+  real em vez de "planejado"), seção nova "Monitoramento", roadmap com Etapa 2
+  e Etapa 3 fechadas.
+- Bloqueios / decisões pendentes do autor: nenhum.
+- Riscos observados: nenhum novo.
+
+VEREDITO: **PODE AVANÇAR para F6** — todos os hard requirements de F5
 fechados, nenhuma exceção pendente.
