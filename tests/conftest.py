@@ -7,15 +7,16 @@ import pytest
 
 from src.config import settings
 
-_SAMPLE_TEXTS = [
-    "sem sinais de isquemia aguda",
-    "paciente estavel sem queixas",
-    "dor toracica intensa com choque",
-    "exame de rotina sem alteracoes",
-    "quadro critico com instabilidade hemodinamica",
-    "consulta de acompanhamento normal",
-]
-_SAMPLE_LABELS = ["atencao", "normal", "urgente", "normal", "urgente", "normal"]
+_BASE_PHRASES = {
+    "atencao": "sem sinais de isquemia aguda, caso {i} sob observação",
+    "normal": "paciente estavel sem queixas, consulta de rotina {i}",
+    "urgente": "dor toracica intensa com choque, quadro critico {i}",
+}
+# 10 por classe: mínimo para o split estratificado de calibração (caixa 6.2,
+# CALIB_HOLDOUT_FRACTION=0.2) conseguir >= 2 amostras por classe na fatia de
+# calibração sem lançar ValueError do CalibratedClassifierCV.
+_SAMPLE_TEXTS = [phrase.format(i=i) for phrase in _BASE_PHRASES.values() for i in range(10)]
+_SAMPLE_LABELS = [label for label in _BASE_PHRASES for _ in range(10)]
 
 
 @pytest.fixture
