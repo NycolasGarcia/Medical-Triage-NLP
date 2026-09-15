@@ -58,13 +58,21 @@ make stack-up       # docker compose up -d (API + Prometheus + Grafana)
 
 Verificar que o Prometheus enxerga a API: Status -> Targets, alvo `api` deve estar `UP`.
 
+Dashboard já vem provisionado (datasource + JSON em `monitoring/grafana/`,
+sem clicar em nada) — abrir `http://localhost:3000/d/triagem-urgencia`.
+Evidência com dado real: `docs/evidence/f5_grafana_dashboard_2026-09-15.png`.
+
 ## Gerar carga (para popular o dashboard)
 
 ```bash
-python scripts/load_test.py --requests 500 --concurrency 10
+make load-test                                    # defaults: 500 requisições, concorrência 10
+uv run python -m scripts.load_test --requests 500 --concurrency 10   # com flags
 ```
 
-Sem carga o dashboard fica vazio e a evidência da rubrica R2 não existe.
+Sem carga o dashboard fica vazio e a evidência da rubrica R2 não existe. O
+script amostra textos reais de `data/processed/test.csv` (não uma string fixa
+repetida) e dispara ~2% das chamadas contra `/health` — tráfego mais realista
+pro gráfico de "Total de requisições" mostrar mais de uma série.
 
 ## Benchmark de latência
 

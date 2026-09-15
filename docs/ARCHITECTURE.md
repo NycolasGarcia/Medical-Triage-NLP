@@ -15,13 +15,13 @@ orquestrado e observabilidade local.
 
 | Componente | Tecnologia | Porta | Responsabilidade | Status |
 |---|---|---|---|---|
-| API de inferência | FastAPI + Uvicorn | 8000 | `/predict`, `/health` | **implementado (F3)** |
+| API de inferência | FastAPI + Uvicorn | 8000 | `/predict`, `/health`, `/metrics` | **implementado (F3/F5)** |
 | Container | Docker (multi-stage) | — | Empacota a API para deploy | **implementado (F3)** |
-| Métricas | `prometheus_client` (`/metrics`) | 8000 | Expor contadores/histogramas | planejado (F5) |
-| Prometheus | Prometheus | 9090 | Coleta de métricas da API | planejado (F5) |
-| Grafana | Grafana | 3000 | Dashboard de requisições, latência e erro | planejado (F5) |
-| Orquestrador | Airflow | 8080 | DAG de ingestão, treino e promoção | planejado (F4) |
-| Tracking | MLflow | 5000 (UI local) | Experimentos (já em uso) e Model Registry | tracking **em uso (F2/F3)**; Registry planejado (F6) |
+| Métricas | `prometheus_client` (`/metrics`) | 8000 | Contadores de requisição/erro, histograma de latência, classe predita | **implementado (F5)** |
+| Prometheus | Prometheus v2.53 | 9090 | Coleta de métricas da API (scrape 5s) | **implementado (F5)** |
+| Grafana | Grafana 11.1 | 3000 | Dashboard provisionado como código (4 painéis) | **implementado (F5)** |
+| Orquestrador | Airflow 3.2 | 8080 | DAG `retrain_triage_model`: ingest→preprocess→train→evaluate→register | **implementado (F4)** |
+| Tracking | MLflow | 5000 (UI local) | Experimentos e Model Registry | tracking + registro de versão **em uso (F2-F4)**; promoção de stage planejada (F6) |
 
 ## 3. Fluxo de inferência (implementado em F3)
 
@@ -40,6 +40,10 @@ flowchart LR
     MW --> C
 
     H[Cliente] -->|GET /health| MW2[Middleware] --> HE["/health -> status: ok"] --> H
+
+    P[Prometheus] -->|"scrape /metrics a cada 5s"| ME["/metrics"]
+    ME --> P
+    P --> G[Grafana: dashboard provisionado]
 ```
 
 **Startup (não por requisição):** o `lifespan` do FastAPI carrega
@@ -48,37 +52,40 @@ persistido por `src/models/train.py`) uma única vez em `app.state.pipeline` —
 de F3, registrada em `src/api/main.py` (não abriu ADR próprio: escolha padrão de
 baixo risco, ver `docs/PROGRESS.md`).
 
-`/metrics` para o Prometheus ainda não existe — é F5 (caixa 5.1), não confundir com
-o `/health` atual.
+`/metrics` (F5) expõe `http_requests_total`, `http_request_duration_seconds`
+(histograma), `http_errors_total` e `predictions_total` (métrica de negócio —
+distribuição de classes preditas, base para detectar drift). Registrado em
+`src/monitoring/metrics.py`, chamado pelo mesmo middleware que já loga cada
+requisição — uma única passagem, sem medir latência duas vezes.
 
-## 4. Fluxo de treino (implementado em F1-F3; retreino orquestrado é F4)
+## 4. Fluxo de treino e retreino (implementado em F1-F4)
 
 ```mermaid
 flowchart LR
-    subgraph pipeline_dados["Pipeline de dados (DVC, F1)"]
-        RAW["download: medical_tc_*.csv"] --> PREP["preprocess: mapear rótulo (ADR-0001) + dedupe"]
-        PREP --> SPLIT["split: train.csv / test.csv (seed=42)"]
+    subgraph dag["Airflow: DAG retrain_triage_model (F4, @weekly ou manual)"]
+        ING["ingest: download_raw"] --> PP["preprocess: mapear rótulo (ADR-0001) + dedupe + split"]
+        PP --> TR["train: fit TF-IDF + LogReg"]
+        TR --> EV["evaluate: métricas no teste reservado"]
+        EV --> REG["register: versiona no MLflow Registry + tag elegivel_promocao (ADR-0008)"]
     end
 
-    subgraph treino["Treino do modelo final (F2-F3)"]
-        SPLIT --> EXP["experiments.py: CV 5-fold, 6 candidatos comparados (ADR-0003)"]
-        EXP -.->|"registrado"| MLF[(MLflow: experimento triagem-urgencia)]
-        SPLIT --> TRAIN["train.py: fit TF-IDF + LogReg no train.csv completo"]
-        TRAIN --> ART["models/current/model.joblib"]
-        TRAIN -.->|"registrado"| MLF
-    end
+    TR --> ART["models/current/model.joblib"]
+    TR -.->|"log_model"| MLF[(MLflow: experimento triagem-urgencia)]
+    EV -.->|"log_metrics no mesmo run"| MLF
+    REG -.->|"register_model"| MLR[("MLflow Model Registry: triagem-urgencia")]
 
     ART --> API["API carrega no startup (Seção 3)"]
 
-    TRAIN -.->|planejado F4| DAG["DAG Airflow: retrain_triage_model"]
-    MLF -.->|planejado F6| REG["MLflow Registry: Staging -> Production"]
+    MLR -.->|planejado F6, ADR-0005| PROD["Promoção @production (manual até F6)"]
 ```
 
-Hoje o treino roda sob comando manual (`make train` / `uv run python -m
-src.models.train`), consumindo o dataset já processado pelo pipeline DVC. A
-orquestração automática (ingestão → treino → avaliação → promoção, disparada por
-schedule) é o escopo de F4 — o critério de promoção do modelo fica em ADR-0008
-(ainda não aberto).
+Comando manual equivalente às tasks `train`/`evaluate`/`register`:
+`make train` (`src/models/train.py`) treina e persiste; a avaliação no teste
+reservado e o registro no MLflow Registry só acontecem via DAG hoje. A DAG é
+parametrizada (`min_f1_macro`, `max_sub_triagem_increase` — ADR-0008) e roda
+ponta a ponta com evidência real em `docs/evidence/f4_dag_execucao_2026-09-14.md`.
+Promoção de stage (`@production`) continua decisão manual até a matriz de custo
+de ADR-0005 (F6) existir.
 
 ## 5. Contratos
 
@@ -111,4 +118,4 @@ decisão consciente registrada em `docs/model_card.md` (limitação 2), não bug
 | 0003 | Modelo base | aceito |
 | 0004 | Técnica de otimização de latência | planejado (F6) |
 | 0005 | Matriz de custo e política de limiar | planejado (F6) |
-| 0008 | Estratégia de retreino e promoção | planejado (F4) |
+| 0008 | Estratégia de retreino e critério de promoção | aceito |

@@ -4,7 +4,7 @@
 
 Classificador de texto (NLP) leve para triagem de urgência de laudos médicos, servido via API REST com pipeline de CI/CD, orquestração de retreino e monitoramento
 
-[Resultados](#resultados) | [Pipeline](#pipeline) | [Instalação](#instalação) | [Docker](#docker) | [Notebooks](#notebooks) | [API](#api-de-inferência) | [Documentação](#documentação) | [Roadmap](#roadmap)
+[Resultados](#resultados) | [Pipeline](#pipeline) | [Instalação](#instalação) | [Docker](#docker) | [Monitoramento](#monitoramento) | [API](#api-de-inferência) | [Documentação](#documentação) | [Roadmap](#roadmap)
 
 Ferramentas:
 
@@ -20,8 +20,8 @@ Detalhes:
 
 [![CI](https://github.com/NycolasGarcia/Medical-Triage-NLP/actions/workflows/ci.yml/badge.svg)](https://github.com/NycolasGarcia/Medical-Triage-NLP/actions/workflows/ci.yml)
 ![Version](https://img.shields.io/badge/version-0.1.0-darkgrey?style=flat)
-![Tests](https://img.shields.io/badge/tests-29%20passing-brightgreen?style=flat)
-![Coverage](https://img.shields.io/badge/coverage-69%25-yellow?style=flat)
+![Tests](https://img.shields.io/badge/tests-37%20passing-brightgreen?style=flat)
+![Coverage](https://img.shields.io/badge/coverage-70%25-yellow?style=flat)
 ![Ruff](https://img.shields.io/badge/ruff-passing-brightgreen?style=flat)
 ![F1 Macro](https://img.shields.io/badge/F1--macro%20(teste)-0.728-blue?style=flat)
 ![Recall Urgente](https://img.shields.io/badge/recall%20urgente%20(teste)-0.769-blue?style=flat)
@@ -123,15 +123,17 @@ comparados sob a mesma validação cruzada de 5 dobras
 
 ```mermaid
 flowchart LR
-    A["Medical Abstracts TC Corpus\n14.438 abstracts (GitHub)"] -->|dvc repro| B["preprocess\nmapeamento ADR-0001 + dedupe"]
+    A["Medical Abstracts TC Corpus\n14.438 abstracts (GitHub)"] -->|dvc repro / DAG ingest| B["preprocess\nmapeamento ADR-0001 + dedupe"]
     B --> C["split\ntrain.csv / test.csv"]
     C --> D{{"6 candidatos\ncomparados em CV"}}
     D --> E["Regressão Logística\nvencedora (ADR-0003)"]
-    E --> F["MLflow\ntracking + Model Registry"]
-    C -.->|"Airflow DAG\nretrain_triage_model"| F
-    F -->|train.py| G["model.joblib"]
-    G --> H["FastAPI\nGET /health · POST /predict"]
+    C -->|"Airflow DAG\nretrain_triage_model"| TR["train + evaluate + register"]
+    TR --> F["MLflow\ntracking + Model Registry"]
+    TR --> G["model.joblib"]
+    G --> H["FastAPI\nGET /health · POST /predict · GET /metrics"]
     H --> I["Cliente / Aplicação"]
+    H -->|scrape 5s| PR["Prometheus"]
+    PR --> GF["Grafana\ndashboard provisionado"]
 ```
 
 ## Stack
@@ -147,12 +149,14 @@ flowchart LR
 | Candidatos comparados | scikit-learn + LightGBM | Dummy, LogReg, RandomForest, MultinomialNB, LightGBM, LinearSVC calibrado |
 | Tracking + Registry | MLflow ≥ 3.16 | Params/métricas/artefatos por run; registro de versão do modelo |
 | Orquestração | Apache Airflow ≥ 3.2 | DAG `retrain_triage_model`: ingest → preprocess → train → evaluate → register |
-| API | FastAPI + Uvicorn, Pydantic | `/health`, `/predict`, middleware de latência |
+| API | FastAPI + Uvicorn, Pydantic | `/health`, `/predict`, `/metrics`, middleware de latência |
+| Métricas | `prometheus_client` | Contadores/histograma expostos em `/metrics` |
+| Monitoramento | Prometheus 2.53 + Grafana 11.1 | Scrape 5s + dashboard provisionado como código (4 painéis) |
 | Validação de dados | pandera | Schema do dataset processado |
 | Logging | JSON estruturado | Sem `print()` em nenhum módulo |
 | Qualidade | ruff, pre-commit | Lint + mccabe (complexidade), zero erros |
-| Testes | pytest, pytest-cov, httpx | 29 testes, 69% cobertura em `src/` |
-| Container | Docker multi-stage | Builder + runtime, usuário não-root, `HEALTHCHECK` |
+| Testes | pytest, pytest-cov, httpx | 37 testes, 70% cobertura em `src/` |
+| Container | Docker multi-stage + Compose | API + Prometheus + Grafana, usuário não-root, `HEALTHCHECK` nos 3 |
 
 </div>
 
@@ -180,11 +184,14 @@ make train
 
 ```bash
 make lint            # ruff check
-make test            # pytest (29 testes)
+make test            # pytest (37 testes)
 
 make run             # API com reload -> http://localhost:8000/docs
 make train            # treina e persiste o modelo vencedor
 make bench            # benchmark de latência (docs/LATENCY.md)
+
+make stack-up         # API + Prometheus + Grafana -> http://localhost:3000
+make load-test         # gera tráfego pra popular o dashboard
 ```
 
 ### Makefile
@@ -199,7 +206,8 @@ make bench            # benchmark de latência (docs/LATENCY.md)
 | `make train` | Treina e persiste o modelo final (`src/models/train.py`) |
 | `make run` | Sobe a API local com reload (`uvicorn`) |
 | `make bench` | Benchmark de latência do `/predict` (`scripts/benchmark.py`) |
-| `make stack-up` / `stack-down` | `docker compose up -d` / `down` *(stack completa: F5)* |
+| `make stack-up` / `stack-down` | `docker compose up -d` / `down` — API + Prometheus + Grafana |
+| `make load-test` | Gera tráfego contra a API (`scripts/load_test.py`) |
 
 </div>
 
@@ -218,17 +226,41 @@ para TF-IDF+LogReg sozinho; achado registrado em
 trabalho planejado para F6). Latência medida dentro do container: **p50 2,65 ms
 · p95 3,11 ms** (protocolo completo em `docs/LATENCY.md`).
 
-`docker-compose.yml` (API + Prometheus + Grafana) é entregável de **F5**, ainda
-não implementado.
+## Monitoramento
+
+```bash
+make stack-up      # API + Prometheus + Grafana, docker-compose.yml
+make load-test      # gera tráfego real pra popular o dashboard
+```
+
+<div align="center">
+
+| Serviço | URL | Credenciais |
+|---|---|---|
+| API | http://localhost:8000/docs | — |
+| Métricas | http://localhost:8000/metrics | — |
+| Prometheus | http://localhost:9090 | — |
+| Grafana | http://localhost:3000/d/triagem-urgencia | admin / admin |
+
+</div>
+
+Datasource e dashboard **provisionados como código** (`monitoring/grafana/provisioning/`,
+JSON commitado) — nada pra clicar manualmente. 4 painéis: total de requisições
+(por rota/status), latência p50/p95, taxa de erro e distribuição de classes
+preditas (métrica de negócio, base pra detectar drift). Print com dado real:
+
+![Dashboard Grafana](docs/evidence/f5_grafana_dashboard_2026-09-15.png)
 
 ## MLflow e Model Registry
 
 - Experimento: `triagem-urgencia`, backend `sqlite:///mlflow.db`. 6 candidatos
-  comparados em F2 + run de treino final, todos rastreados com parâmetros, 9
+  comparados em F2 + runs de treino da DAG, todos rastreados com parâmetros, 9
   métricas e matriz de confusão como artefato.
-- Modelo final registrado no Model Registry (`triagem-urgencia`, versão 1) a cada
-  execução da DAG de retreino — **sem promoção de stage** (Staging/Production):
-  o critério de promoção é decisão de ADR-0008, planejada para F6.
+- Modelo registrado no Model Registry (`triagem-urgencia`) a cada execução da DAG
+  de retreino, com tag `elegivel_promocao` calculada pelo critério de ADR-0008
+  (piso de F1-macro + não regressão de sub-triagem) — **sem promoção automática de
+  stage**: a troca de `@production` continua decisão manual até a matriz de custo
+  de ADR-0005 (F6) existir.
 
 ## Documentação
 
@@ -267,6 +299,7 @@ requisição). Middleware loga `request_id`, latência e classe predita por requ
 |---|---|---|
 | `GET` | `/health` | Liveness check: `{"status": "ok"}` |
 | `POST` | `/predict` | Recebe texto do laudo, retorna classe + probabilidades |
+| `GET` | `/metrics` | Métricas Prometheus (requisições, latência, erros, classe predita) |
 | `GET` | `/docs` | Swagger UI interativo (gerado automaticamente pelo FastAPI) |
 
 </div>
@@ -305,16 +338,19 @@ medical-triage-nlp/
 │   ├── api/                # FastAPI: main, schemas, model_runtime
 │   ├── data/                # load, labels, dedupe, split, prepare, schema
 │   ├── features/             # TF-IDF (Strategy)
-│   ├── models/                # factory, train, evaluate, experiments, tracking
+│   ├── models/                # factory, train, evaluate, experiments, tracking, promotion
+│   ├── monitoring/             # metrics.py — instrumentação Prometheus
 │   ├── config.py, logging_config.py
 ├── airflow/dags/              # retrain_dag.py — retrain_triage_model
-├── tests/                     # smoke, schema, API, factory, train, evaluate, ...
+├── tests/                     # smoke, schema, API, factory, train, evaluate, metrics, ...
 ├── notebooks/                 # 01_eda.ipynb
-├── scripts/                   # benchmark.py
-├── docs/                      # ADRs, cards, LATENCY, ARCHITECTURE, PROGRESS
+├── scripts/                   # benchmark.py, load_test.py
+├── monitoring/                # prometheus.yml, grafana/provisioning/ (datasource + dashboard)
+├── docs/                      # ADRs, cards, LATENCY, ARCHITECTURE, PROGRESS, evidence/
 ├── data/                      # raw/ processed/ — não versionado no git
 ├── models/                    # artefatos (git-ignored; versionados via MLflow)
 ├── Dockerfile                  # multi-stage (builder + runtime)
+├── docker-compose.yml           # API + Prometheus + Grafana
 ├── dvc.yaml / dvc.lock          # pipeline de dados (3 estágios)
 ├── .github/workflows/ci.yml      # lint → test → build
 └── pyproject.toml                # deps, ruff, pytest — single source of truth
@@ -328,15 +364,15 @@ medical-triage-nlp/
   - [x] MLflow + 6 candidatos comparados em CV, ADR-0003 (escolha do modelo)
   - [x] API FastAPI (`/predict`, `/health`), Dockerfile multi-stage, latência baseline medida
   - [x] ADR-0002 (arquitetura de deploy: real-time, AWS ECS/Fargate teórico)
-- [ ] **Etapa 2 — CI/CD e Pipeline Automatizado**
-  - [x] CI expandido: `lint` → `test` → `build`, verde no GitHub Actions
+- [x] **Etapa 2 — CI/CD e Pipeline Automatizado**
+  - [x] CI expandido: `lint` → `test` → `build`, verde no GitHub Actions, badge real no README
   - [x] Relatório de cobertura no CI
   - [x] DAG `retrain_triage_model` executada de ponta a ponta (5/5 tasks), registro no MLflow Model Registry
-  - [ ] Badge de status no README + cache de dependências confirmado
-  - [ ] RUNBOOK do Airflow completo + DAG parametrizada + ADR-0008 (critério de promoção)
-- [ ] **Etapa 3 — Monitoramento e Observabilidade**
-  - [ ] Instrumentação Prometheus (`/metrics`), `docker-compose.yml` (API + Prometheus + Grafana)
-  - [ ] Dashboard Grafana provisionado como código, gerador de carga
+  - [x] RUNBOOK do Airflow completo + DAG parametrizada (`Param`) + ADR-0008 (critério de promoção)
+- [x] **Etapa 3 — Monitoramento e Observabilidade**
+  - [x] Instrumentação Prometheus (`/metrics`): requisições, latência, erros, classe predita
+  - [x] `docker-compose.yml` (API + Prometheus + Grafana), os 3 serviços `healthy`
+  - [x] Dashboard Grafana provisionado como código (4 painéis), gerador de carga, print com dado real
 - [ ] **Etapa 4 — Otimização de Latência e Entrega**
   - [ ] Matriz de custo assimétrica + ajuste de limiar (ADR-0005), calibração de probabilidade
   - [ ] Export ONNX + benchmark comparativo, promoção do modelo no Registry (ADR-0008)
