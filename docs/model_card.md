@@ -1,114 +1,157 @@
 # Model Card — Classificador de urgência de laudos
 
-> Rascunho de F2 — candidato provisório (baseline, sem calibração/otimização).
-> Versão final em F7, após tuning (F6) e possível troca de modelo/limiar.
+> Versão final (F7). Substitui o rascunho de F2 — reescrito por completo após
+> tuning de representação, calibração, matriz de custo, limiar e otimização de
+> latência (F6). Métricas datadas e a fonte (MLflow run/ADR) de cada uma estão
+> indicadas, não apenas o número.
 
 ## 1. Detalhes do modelo
 
 | Campo | Valor |
 |---|---|
-| Tarefa | Classificação de texto multiclasse ordinal (`normal` < `atencao` < `urgente`) |
-| Arquitetura | TF-IDF (unigramas, max_features=20000) + Regressão Logística, **sem calibração** |
-| Versão | Baseline F2 — melhor dos 3 candidatos comparados, não o modelo final |
-| Data | 2026-09-10 |
-| Framework | scikit-learn (ONNX Runtime entra em F6) |
+| Tarefa | Classificação de texto multiclasse ordinal (`normal` < `atenção` < `urgente`) |
+| Arquitetura (produção, backend `sklearn`) | `FeatureUnion` (TF-IDF palavra bigrama + TF-IDF char n-grama 3-5 + marcação de negação) → Regressão Logística → calibração isotônica → limiar cumulativo de decisão |
+| Arquitetura (backend `onnx`, opt-in) | TF-IDF palavra bigrama (sem char n-grama/negação — limitação real do `skl2onnx`, ADR-0004) → Regressão Logística → calibração isotônica manual (Python, fora do grafo ONNX) → mesmo limiar |
+| Versão | F6 final — MLflow Model Registry `triagem-urgencia`, versão 5, alias `@production` |
+| Data | 2026-09-15 |
+| Framework | scikit-learn 1.9 (produção) + ONNX Runtime 1.30 (variante opcional) |
 | Autor | Nycolas Garcia |
-| Rastreabilidade | MLflow run id `ed2e5ded`, experimento `triagem-urgencia` |
+| Decisões vinculadas | ADR-0001 (rótulo), ADR-0003 (modelo base), ADR-0004 (ONNX), ADR-0005 (custo/limiar), ADR-0010 (critério de promoção) |
 
 ## 2. Uso pretendido
 
 **Pretendido:** exercício acadêmico de MLOps — demonstrar ciclo de vida de modelo em
-produção (CI/CD, orquestração, monitoramento, otimização de latência).
+produção (CI/CD, orquestração, monitoramento, otimização de latência) sobre um
+problema de classificação de texto com custo assimétrico entre erros.
 
 **Não pretendido:** qualquer decisão clínica, priorização real de pacientes ou
-substituição de julgamento profissional. O rótulo de urgência é derivado (ADR-0001).
+substituição de julgamento profissional. O rótulo de urgência é **derivado** por
+heurística (ADR-0001), nunca validado clinicamente — ver §7.
 
 ## 3. Dados
 
-Ver `data_card.md`. Ponto crítico: o alvo é **proxy**, não urgência observada.
+Ver `data_card.md`. Ponto crítico, reafirmado após a análise qualitativa de F6
+(§7 abaixo): o alvo é **proxy** (categoria de assunto do artigo médico), não
+urgência clínica observada — essa é a causa dominante dos erros residuais do
+modelo, não falha de representação ou calibração.
 
 ## 4. Performance
 
-Média de 5-fold CV estratificada sobre `data/processed/train.csv` (8.980 amostras);
-o conjunto de teste (2.245 amostras) segue reservado, não usado nesta fase. Tabela
-comparativa completa (6 candidatos, incluindo Dummy, Random Forest, Multinomial NB,
-LightGBM e LinearSVC calibrado) em `docs/EXPERIMENTS.md` — a Regressão Logística
-seguiu vencedora em F1-macro e ROC-AUC após a comparação estendida (ADR-0003).
+Duas leituras diferentes, não confundir: **CV** (5 dobras, `train.csv`, 8.980
+amostras, usada para tunar cada componente) e **teste reservado** (`test.csv`,
+2.245 amostras, nunca usado em nenhuma busca de F2/F6 — a leitura que mais importa).
 
-| Métrica | Valor | Observação |
+### 4.1 Efeito de cada componente (CV, `docs/EXPERIMENTS.md`)
+
+| Etapa | F1 macro | Recall `urgente` | Sub-triagem |
+|---|---|---|---|
+| TF-IDF unigrama (F2, sem nenhuma técnica de F6) | 0,731 | 0,796 | 11,8% |
+| + representação tunada (6.1: bigramas+char n-grama+negação) | **0,734** | 0,792 | 11,9% |
+| + calibração isotônica (6.2) | 0,724 | 0,815 | 9,3% |
+
+O limiar de custo (6.4) não entra nesta tabela por ser avaliado sobre
+probabilidades *out-of-fold* agrupadas, não médias por dobra (protocolo
+diferente, mesma fonte de dados) — resultado em CV: recall `urgente` 0,903,
+custo médio 0,645 (-45% vs. argmax). Efeito completo (incluindo F1-macro, que
+cai de propósito) no teste reservado, tabela 4.2 — é a leitura que importa.
+
+### 4.2 Teste reservado — modelo final vs. antes do limiar
+
+| Métrica | Antes do limiar (argmax) | Modelo final (limiar tunado) |
 |---|---|---|
-| F1 macro | 0,731 | vs. 0,339 do DummyClassifier |
-| F1 weighted | 0,733 | |
-| Recall `urgente` | 0,796 | métrica mais importante deste modelo |
-| Recall `atencao` | 0,818 | |
-| Recall `normal` | 0,584 | classe com mais confusão (ver matriz) |
-| ROC-AUC (OvR) | 0,877 | |
+| F1 macro | 0,728 | 0,523 |
+| Recall `normal` | 0,545 | **0,044** |
+| Recall `atenção` | 0,858 | 0,929 |
+| Recall `urgente` | 0,799 | **0,880** |
+| Sub-triagem | 10,3% | **4,3%** |
+| Sobre-triagem | 15,9% | 32,6% |
+| Custo médio (matriz §5) | 1,290 | **0,672** (-48%) |
 
-Matriz de confusão 3×3: artefato `confusion_matrix.csv` no run MLflow `ed2e5ded`.
+## 5. Política de decisão (ADR-0005)
 
-### Erros por tipo (sub-triagem vs. sobre-triagem)
+**Matriz de custo** (assimetria deliberada — §7 do enunciado): sub-triagem de 1
+nível = 5, de 2 níveis = 15; sobre-triagem de 1 nível = 1, de 2 níveis = 2.
+Sub-triagem custa 5-15× mais que o erro simétrico porque é o erro perigoso
+(atraso no atendimento a paciente crítico); sobre-triagem é "caro, mas seguro".
 
-Contagem agregada das 5 dobras (8.980 predições no total). Quebra por magnitude
-(1 nível vs. 2 níveis) e custo sob a matriz assimétrica ficam para F6 (ADR-0005) —
-esta é a "primeira leitura" prevista na caixa 2.6, não a análise final.
+**Calibração**: isotônica (`CalibratedClassifierCV`, sklearn; calibrador
+one-vs-rest manual no backend ONNX) — vencedora sobre Platt em Brier e ECE
+(`docs/EXPERIMENTS.md`).
 
-| Tipo de erro | Contagem | % |
-|---|---|---|
-| Sub-triagem (agregada) | 1.057 | 11,8% |
-| Sobre-triagem (agregada) | 1.315 | 14,6% |
-| Acerto exato | 6.608 | 73,6% |
+**Limiar de decisão**: regra cumulativa, não argmax — prediz `urgente` se
+`P(urgente) ≥ 0,31`; senão `atenção` se `P(atenção)+P(urgente) ≥ 0,09`; senão
+`normal`. Os dois valores vêm de busca em CV (out-of-fold, sem vazamento),
+não escolhidos à mão — `src/models/threshold.py`.
 
-Custo total sob a matriz assimétrica (ADR-0005): pendente — matriz de custo ainda
-não implementada (F6, caixa 6.3).
+**Trade-off aceito, com número**: sub-triagem caiu de ~10% para ~4% (teste
+reservado); em troca, sobre-triagem subiu de ~16% para ~33% e o recall de
+`normal` caiu para 0,04 — o modelo praticamente para de prever `normal`. Revisado
+pelo autor após leitura qualitativa de erros (§7) e mantido deliberadamente —
+ver ADR-0005, seção "Revisão do autor".
 
-## 5. Política de decisão
+## 6. Latência (ADR-0004, `docs/LATENCY.md`)
 
-Calibração aplicada: nenhuma ainda — planejada para F6 (Platt/isotônica, caixa 6.2).
-Limiares por classe: nenhum ajuste ainda — decisão hoje é o argmax padrão do
-`predict_proba`. Ajuste orientado a reduzir sub-triagem entra em F6 (ADR-0005).
-Trade-off aceito: nenhum ainda formalizado — os números de sub/sobre-triagem acima
-são a linha de base **antes** de qualquer política deliberada de limiar.
+| Métrica | Backend `sklearn` (padrão) | Backend `onnx` (opt-in) | Ganho |
+|---|---|---|---|
+| p50 | 6,47 ms | 2,57 ms | -60,3% |
+| p95 | 7,01 ms | 2,92 ms | **-58,3%** |
+| p99 | 7,18 ms | 3,10 ms | -56,8% |
+| Tamanho do artefato | 2,4 MB | 0,79 MB | -67% |
 
-## 6. Latência
-
-Ainda não medida — entra em F3 (baseline, API em container) e F6 (comparativo
-original vs. otimizado). Ver `LATENCY.md`.
+Medido em container, N=1.000, warm-up 100, 3 execuções (protocolo completo em
+`docs/LATENCY.md`). Custo de qualidade do backend `onnx`: representação mais
+simples (sem char n-gramas/negação — `skl2onnx` não converte nenhuma das duas),
+F1-macro CV 0,723 vs. 0,734 do `sklearn` — a calibração e o limiar são
+preservados nos dois backends igualmente.
 
 ## 7. Limitações
 
-1. Rótulo derivado por heurística (ADR-0001) — a performance mede aderência ao
-   mapeamento, não acurácia clínica.
-2. Corpus de abstracts em **inglês**, não laudos reais em português. A documentação
-   do projeto é em português, mas o texto de entrada esperado pela API é em inglês
-   — é o idioma do dataset recomendado pelo enunciado, não uma inconsistência a
-   corrigir. Testado manualmente em F3: o modelo perde poder discriminativo em
-   texto português (probabilidades quase uniformes), e funciona como esperado em
-   inglês (ex.: frase de choque cardiogênico → 66,5% `urgente`).
-3. Modelo de saco de palavras (unigramas): negação e contexto de frase não são
-   capturados — "sem sinais de X" e "sinais de X" têm representação muito parecida
-   nesta versão. Negadores **não são removidos** pelo vetorizador (stopwords
-   desativado por padrão), mas isso só evita perder a palavra, não captura o
-   contexto. N-gramas (1,2) para mitigar isso ficam para o tuning de F6.
-4. Sem detecção de fora-de-distribuição: texto de domínio distinto recebe classe com
-   confiança possivelmente alta e sem sentido.
+1. **Rótulo derivado por heurística (ADR-0001)** — a performance mede aderência
+   ao mapeamento categoria-de-assunto → urgência, não acurácia clínica.
+   **Achado concreto de F6** (`docs/error_analysis.md`): boa parte dos erros
+   residuais (em ambas direções) são artigos de pesquisa/metodologia cujo texto
+   diverge sistematicamente da categoria original do corpus — ex. um artigo
+   sobre fibrilação ventricular classificado `normal` porque cai em "condições
+   patológicas gerais", não "cardiovascular", no corpus original. Não é ruído
+   aleatório, é um teto de qualidade estrutural do mapeamento.
+2. Corpus de abstracts em **inglês**, não laudos reais em português. A entrada
+   esperada pela API é inglês — decisão consciente (idioma do dataset), não
+   inconsistência.
+3. **Recall de `normal` extremamente baixo (0,04)** — efeito colateral
+   matematicamente correto da assimetria de custo (§5), mas muda o caráter do
+   sistema: deixa de ser um classificador 3-vias equilibrado e vira, na prática,
+   um filtro "isto claramente não é normal?". Se isso for operacionalmente
+   inviável, o ajuste correto é a matriz de custo (§14/ADR-0005), não o código
+   do limiar.
+4. Sem detecção de fora-de-distribuição: texto de domínio distinto recebe
+   classe com confiança possivelmente alta e sem sentido.
+5. Backend `onnx` não se atualiza sozinho se a representação vencedora mudar —
+   dois pipelines para manter em sincronia (ADR-0004).
 
 ## 8. Vieses
 
-- Vieses do corpus de origem (áreas médicas sobre-representadas) propagam para as
-  faixas de urgência via mapeamento.
-- Sem atributos demográficos, não é possível auditar viés por grupo — isso é uma
-  limitação, não uma ausência de viés.
+- Vieses do corpus de origem (áreas médicas sobre-representadas) propagam para
+  as faixas de urgência via mapeamento.
+- Sem atributos demográficos, não é possível auditar viés por grupo — isso é
+  uma limitação, não uma ausência de viés.
+- A política de limiar (§5) introduz um viés **deliberado e documentado**: o
+  sistema super-representa `atenção`/`urgente` às custas de `normal` — é a
+  escolha de design do projeto, não um artefato de treino.
 
 ## 9. Cenários de falha
 
 | Cenário | Efeito | Mitigação |
 |---|---|---|
-| Texto muito curto / vazio | Predição instável | Validação de tamanho mínimo na API |
-| Laudo com negação pesada | Sub ou sobre-triagem | Negadores não são removidos hoje; n-gramas (1,2) planejados para F6 |
-| Vocabulário novo (drift) | Queda silenciosa de qualidade | Monitorar distribuição de classes preditas (F5) |
-| Texto em português (ou outro idioma fora do treino) | Saída sem sentido — o modelo espera inglês (idioma do dataset), não é falha de configuração | Nenhuma — decisão consciente (item 2 das limitações); exemplos de API/demo/vídeo usam texto em inglês |
+| Texto muito curto / vazio | Predição instável | Validação Pydantic na API (mínimo de caracteres) |
+| Artigo de metodologia/pesquisa básica sobre tema grave, mas categorizado `normal` no corpus | Sobre-triagem sistemática (`normal`→`urgente`), não aleatória | Documentado como teto do mapeamento de rótulo (§7.1); não corrigível por limiar |
+| Texto em português (ou outro idioma fora do treino) | Saída sem sentido — modelo espera inglês | Nenhuma — decisão consciente (item 2); exemplos de API/demo/vídeo em inglês |
+| Vocabulário novo (drift) | Queda silenciosa de qualidade | Monitorar distribuição de classes preditas (F5, dashboard Grafana) |
+| Alguém interpreta `normal` como "seguro" | Recall de `normal` é 0,04 — a classe quase não é usada por design | Documentado com destaque neste Model Card e em ADR-0005; não é bug |
 
 ## 10. Monitoramento em produção
 
-Métricas expostas e painéis: ver `RUNBOOK.md` e o dashboard do Grafana.
-Sinal de alerta principal: mudança na distribuição de classes preditas + aumento de p95.
+Métricas expostas e painéis: ver `RUNBOOK.md` e o dashboard do Grafana
+(`monitoring/grafana/provisioning/dashboards/triagem-urgencia.json`).
+Sinal de alerta principal: mudança na distribuição de classes preditas (esperado
+ser dominado por `atenção`/`urgente` dado o limiar — um salto de `normal` seria
+o sinal anômalo, não o contrário) + aumento de p95.

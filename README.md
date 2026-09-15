@@ -68,14 +68,20 @@ O corpus **não** traz rótulo de urgência clínica — a faixa `normal/atenç�
 Como as classes são ordinais, dois erros têm custo muito diferente: **sub-triagem**
 (`urgente` classificado como `atenção`/`normal` — atraso no atendimento a paciente
 crítico) e **sobre-triagem** (`normal` classificado acima — custa tempo de equipe,
-não risco). O modelo campeão registra sub-triagem de 11,8% em validação cruzada
-(vs. 32,9% do baseline Dummy) — quase 3× menos casos `urgente` rebaixados.
+não risco). Matriz explícita ([ADR-0005](docs/adr/0005-matriz-custo-politica-limiar.md)):
+sub-triagem de 1 nível = 5, de 2 níveis = 15; sobre-triagem = 1–2 — sub-triagem
+custa 5-15× mais porque é o erro perigoso.
 
-> A matriz de custo assimétrica explícita e o ajuste de limiar por classe
-> (deliberadamente enviesado para reduzir sub-triagem) são trabalho de F6 —
-> **planejado, não implementado ainda** (ADR-0005). Até lá, a decisão é o argmax
-> padrão do `predict_proba`, sem política de limiar. Leitura completa em
-> [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md) e [docs/model_card.md](docs/model_card.md).
+A API decide por um **limiar cumulativo tunado sobre essa matriz**, não por
+probabilidade máxima (`src/models/threshold.py`): no teste reservado, isso derruba
+sub-triagem de 10,3% para **4,3%** e o custo médio em **48%** (1,290 → 0,672) — ao
+custo de mais sobre-triagem (15,9% → 32,6%) e do recall de `normal` caindo para
+**0,04** (efeito colateral matematicamente esperado da assimetria, mantido
+deliberadamente após revisão — ver [ADR-0005](docs/adr/0005-matriz-custo-politica-limiar.md)).
+
+> Leitura completa (matriz, busca de limiar, achados qualitativos de erro) em
+> [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md), [docs/error_analysis.md](docs/error_analysis.md)
+> e [docs/model_card.md](docs/model_card.md).
 
 ## Reprodutibilidade
 
@@ -180,7 +186,7 @@ flowchart LR
 | Validação de dados | pandera | Schema do dataset processado |
 | Logging | JSON estruturado | Sem `print()` em nenhum módulo |
 | Qualidade | ruff, pre-commit | Lint + mccabe (complexidade), zero erros |
-| Testes | pytest, pytest-cov, httpx | 37 testes, 70% cobertura em `src/` |
+| Testes | pytest, pytest-cov, httpx | 77 testes, 63% cobertura em `src/` |
 | Container | Docker multi-stage + Compose | API + Prometheus + Grafana, usuário não-root, `HEALTHCHECK` nos 3 |
 
 </div>
@@ -284,14 +290,17 @@ preditas (métrica de negócio, base pra detectar drift). Print com dado real:
 
 ## MLflow e Model Registry
 
-- Experimento: `triagem-urgencia`, backend `sqlite:///mlflow.db`. 6 candidatos
-  comparados em F2 + runs de treino da DAG, todos rastreados com parâmetros, 9
-  métricas e matriz de confusão como artefato.
-- Modelo registrado no Model Registry (`triagem-urgencia`) a cada execução da DAG
-  de retreino, com tag `elegivel_promocao` calculada pelo critério de ADR-0008
-  (piso de F1-macro + não regressão de sub-triagem) — **sem promoção automática de
-  stage**: a troca de `@production` continua decisão manual até a matriz de custo
-  de ADR-0005 (F6) existir.
+- Experimento: `triagem-urgencia`, backend `sqlite:///mlflow.db`. Dezenas de runs
+  rastreados ao longo do projeto (6 candidatos de F2, buscas de representação/
+  calibração/limiar/custo de F6, exports ONNX), todos com parâmetros, métricas e
+  artefatos.
+- Modelo registrado no Model Registry a cada execução da DAG/`scripts/promote_model.py`,
+  com tags `recall_urgente`/`mean_cost`/`elegivel_promocao` calculadas pelo
+  critério de [ADR-0010](docs/adr/0010-criterio-promocao-atualizado-f6.md)
+  (piso de recall de `urgente` + não regressão de custo médio — substituiu o
+  piso de F1-macro de ADR-0008, que teria bloqueado o próprio modelo que
+  ADR-0005 decidiu servir). **Promoção é gate humano, não automática**
+  (`--promote` explícito) — versão **5** promovida a `@production`.
 
 ## Documentação
 
@@ -299,12 +308,13 @@ preditas (métrica de negócio, base pra detectar drift). Print com dado real:
 
 | Documento | Conteúdo |
 |---|---|
-| [docs/model_card.md](docs/model_card.md) | Model Card: performance, limitações (incl. idioma), vieses, cenários de falha |
+| [docs/model_card.md](docs/model_card.md) | Model Card: performance, política de decisão, limitações (incl. idioma), vieses, cenários de falha |
 | [docs/data_card.md](docs/data_card.md) | Origem, licença, distribuição, mapeamento de rótulo do dataset |
-| [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md) | Tabela comparativa legível dos 6 candidatos e leitura dos resultados |
-| [docs/LATENCY.md](docs/LATENCY.md) | Protocolo de benchmark, resultados e breakdown de onde o tempo é gasto |
+| [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md) | Tabela comparativa de todos os candidatos/buscas (F2 a F6) e leitura dos resultados |
+| [docs/error_analysis.md](docs/error_analysis.md) | Análise qualitativa dos erros — achado principal: teto de qualidade do mapeamento de rótulo |
+| [docs/LATENCY.md](docs/LATENCY.md) | Protocolo de benchmark, resultados sklearn vs. ONNX e trade-off de qualidade |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Componentes, diagramas de fluxo de inferência e de treino |
-| [docs/adr/](docs/adr/) | Architecture Decision Records: ADR-0001 a ADR-0009 |
+| [docs/adr/](docs/adr/) | Architecture Decision Records: ADR-0001 a ADR-0010 |
 | [docs/PROGRESS.md](docs/PROGRESS.md) | Log de checkpoints por fase, com evidências e veredito |
 
 </div>
@@ -370,25 +380,28 @@ ambíguas quase sempre escalam para `atenção` com o limiar atual).
 ```
 medical-triage-nlp/
 ├── src/
-│   ├── api/                # FastAPI: main, schemas, model_runtime
-│   ├── data/                # load, labels, dedupe, split, prepare, schema
-│   ├── features/             # TF-IDF (Strategy)
-│   ├── models/                # factory, train, evaluate, experiments, tracking, promotion
-│   ├── monitoring/             # metrics.py — instrumentação Prometheus
+│   ├── api/                   # FastAPI: main, schemas, model_runtime (flag sklearn/onnx)
+│   ├── data/                  # load, labels, dedupe, split, prepare, schema
+│   ├── features/               # vectorize (representação), negation, lexicon, structural
+│   ├── models/                 # factory, train, evaluate, experiments, tracking
+│   │   │                       # representation_tuning, calibration, cost(+comparison),
+│   │   │                       # threshold(+search), promotion
+│   ├── optimization/            # calibrator (isotônico manual), onnx_export, onnx_runtime
+│   ├── monitoring/               # metrics.py — instrumentação Prometheus
 │   ├── config.py, logging_config.py
-├── airflow/dags/              # retrain_dag.py — retrain_triage_model
-├── tests/                     # smoke, schema, API, factory, train, evaluate, metrics, ...
-├── notebooks/                 # 01_eda.ipynb
-├── scripts/                   # benchmark.py, load_test.py
-├── monitoring/                # prometheus.yml, grafana/provisioning/ (datasource + dashboard)
-├── docs/                      # ADRs, cards, LATENCY, ARCHITECTURE, PROGRESS, evidence/
-├── data/                      # raw/ processed/ — não versionado no git
-├── models/                    # artefatos (git-ignored; versionados via MLflow)
-├── Dockerfile                  # multi-stage (builder + runtime)
-├── docker-compose.yml           # API + Prometheus + Grafana
-├── dvc.yaml / dvc.lock          # pipeline de dados (3 estágios)
-├── .github/workflows/ci.yml      # lint → test → build
-└── pyproject.toml                # deps, ruff, pytest — single source of truth
+├── airflow/dags/                # retrain_dag.py — retrain_triage_model
+├── tests/                       # smoke, schema, API, features, models, optimization, ...
+├── notebooks/                    # 01_eda.ipynb
+├── scripts/                      # benchmark.py, load_test.py, promote_model.py
+├── monitoring/                    # prometheus.yml, grafana/provisioning/ (datasource + dashboard)
+├── docs/                          # ADRs, cards, EXPERIMENTS, LATENCY, ARCHITECTURE, PROGRESS, evidence/
+├── data/                          # raw/ processed/ — não versionado no git
+├── models/                        # artefatos (git-ignored; versionados via MLflow)
+├── Dockerfile                      # multi-stage (builder + runtime)
+├── docker-compose.yml               # API + Prometheus + Grafana
+├── dvc.yaml / dvc.lock               # pipeline de dados (3 estágios)
+├── .github/workflows/ci.yml           # lint → test → build
+└── pyproject.toml                     # deps, ruff, pytest — single source of truth
 ```
 
 ## Roadmap
@@ -413,7 +426,8 @@ medical-triage-nlp/
   - [x] Matriz de custo assimétrica + ajuste de limiar por classe (ADR-0005), análise qualitativa de erros
   - [x] Export ONNX + benchmark comparativo (-58,3% no p95), backend alternável por flag (ADR-0004)
   - [x] Promoção do modelo no Registry (ADR-0010, critério atualizado — versão 5 em `@production`)
-  - [ ] Model Card final, README final, vídeo STAR
+  - [x] Model Card final ([docs/model_card.md](docs/model_card.md)), README final
+  - [ ] Vídeo STAR (≤ 5 min)
 
 Progresso completo (checkpoints, portões numéricos, evidências) em
 [docs/PROGRESS.md](docs/PROGRESS.md).
