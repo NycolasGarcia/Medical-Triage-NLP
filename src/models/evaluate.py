@@ -5,6 +5,8 @@ import pandas as pd
 from sklearn.metrics import confusion_matrix, f1_score, recall_score, roc_auc_score
 
 from src.data.labels import URGENCY_CLASSES
+from src.models.cost import mean_cost
+from src.models.threshold import select_label
 
 _LABELS_SORTED = sorted(URGENCY_CLASSES)  # ordem que o sklearn usa em predict_proba
 _URGENCY_RANK = {label: i for i, label in enumerate(URGENCY_CLASSES)}  # normal<atencao<urgente
@@ -44,10 +46,21 @@ def count_sub_over_triage(y_true, y_pred) -> dict[str, int]:
 
 
 def evaluate_pipeline(pipeline, test_path: str = "data/processed/test.csv") -> dict[str, float]:
-    """Avalia um pipeline treinado no teste reservado (nunca visto em CV/treino)."""
+    """Avalia um pipeline treinado no teste reservado (nunca visto em CV/treino).
+
+    Usa `select_label` (limiar cumulativo, caixa 6.4/ADR-0005) para decidir a
+    classe, não `pipeline.predict()` — a API de produção não usa argmax puro
+    (`src/api/main.py`), então avaliar com argmax mediria uma política diferente
+    da que de fato é servida."""
     test = pd.read_csv(test_path)
-    y_true, y_pred = test["urgency_label"], pipeline.predict(test["text"])
+    y_true = test["urgency_label"]
     y_proba = pipeline.predict_proba(test["text"])
+    classes = list(pipeline.classes_)
+    y_pred = [select_label(dict(zip(classes, row, strict=True))) for row in y_proba]
     metrics = compute_metrics(y_true, y_pred, y_proba)
     triage = count_sub_over_triage(y_true, y_pred)
-    return {**metrics, **{f"triage_{k}": v for k, v in triage.items()}}
+    return {
+        **metrics,
+        **{f"triage_{k}": v for k, v in triage.items()},
+        "mean_cost": mean_cost(y_true.to_numpy(), np.array(y_pred)),
+    }
