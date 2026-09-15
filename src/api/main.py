@@ -11,6 +11,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from src.api.model_runtime import MODEL_VERSION, load_pipeline
 from src.api.schemas import HealthResponse, PredictRequest, PredictResponse
 from src.logging_config import configure_logging, get_logger
+from src.models.threshold import select_label
 from src.monitoring.metrics import record_prediction, record_request
 
 logger = get_logger(__name__)
@@ -66,7 +67,9 @@ def predict(body: PredictRequest, request: Request) -> PredictResponse:
     pipeline = request.app.state.pipeline
     proba = pipeline.predict_proba([body.text])[0]
     probabilities = {label: float(p) for label, p in zip(pipeline.classes_, proba, strict=True)}
-    label = max(probabilities, key=probabilities.get)
+    # Limiar cumulativo (caixa 6.4/ADR-0005), não argmax puro — enviesado deliberadamente
+    # contra sub-triagem, ver src/models/threshold.py.
+    label = select_label(probabilities)
     request.state.predicted_label = label
     record_prediction(label)
     return PredictResponse(label=label, probabilities=probabilities, model_version=MODEL_VERSION)
