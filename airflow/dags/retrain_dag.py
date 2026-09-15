@@ -3,9 +3,9 @@
 Cada task chama funções já existentes em `src/` (nenhuma lógica de negócio
 vive aqui, só orquestração — ver §12 do CLAUDE.md). Registra uma nova versão
 do modelo no MLflow Model Registry a cada execução e calcula se ela atinge o
-piso de elegibilidade de promoção (ADR-0008) — **não promove** sozinha; a
-troca do alias `@production` continua decisão manual até a matriz de custo
-de ADR-0005 (F6) existir.
+piso de elegibilidade de promoção (ADR-0008, critério atualizado em F6 —
+recall de `urgente` + custo médio, ver ADR-0005) — **não promove** sozinha;
+a troca do alias `@production` continua decisão manual (caixa 6.10).
 """
 
 from __future__ import annotations
@@ -31,19 +31,22 @@ if str(PROJECT_ROOT) not in sys.path:
     catchup=False,
     tags=["triagem-urgencia", "retreino"],
     params={
-        "min_f1_macro": Param(
-            0.70,
+        "min_recall_urgente": Param(
+            0.85,
             type="number",
             minimum=0,
             maximum=1,
-            description="Piso de F1-macro no teste reservado (ADR-0008).",
+            description=(
+                "Piso de recall de `urgente` no teste reservado (§14/ADR-0005/ADR-0008). "
+                "Abaixo dos 0,90 do alvo de CV — teste é 4x menor, variância amostral "
+                "esperada (ver ADR-0005)."
+            ),
         ),
-        "max_sub_triagem_increase": Param(
-            0.03,
+        "max_cost_increase": Param(
+            0.10,
             type="number",
             minimum=0,
-            maximum=1,
-            description="Regressão máxima aceitável de sub-triagem vs. produção (ADR-0008).",
+            description="Regressão máxima aceitável de custo médio vs. produção (ADR-0008).",
         ),
     },
 )
@@ -101,7 +104,7 @@ def retrain_triage_model():
 
         from src.models.promotion import (
             MODEL_NAME,
-            get_production_sub_triagem_rate,
+            get_production_mean_cost,
             meets_promotion_criteria,
         )
         from src.models.tracking import configure_tracking
@@ -111,27 +114,25 @@ def retrain_triage_model():
         version = mlflow.register_model(model_uri, name=MODEL_NAME)
 
         client = mlflow.MlflowClient()
-        total = sum(
-            evaluate_result[k]
-            for k in ("triage_sub_triagem", "triage_sobre_triagem", "triage_acerto_exato")
-        )
-        sub_triagem_rate = evaluate_result["triage_sub_triagem"] / total
-        baseline_rate = get_production_sub_triagem_rate(client)
+        baseline_cost = get_production_mean_cost(client)
         elegivel = meets_promotion_criteria(
-            evaluate_result["f1_macro"],
-            sub_triagem_rate,
-            params["min_f1_macro"],
-            params["max_sub_triagem_increase"],
-            baseline_rate,
+            evaluate_result["recall_urgente"],
+            evaluate_result["mean_cost"],
+            params["min_recall_urgente"],
+            params["max_cost_increase"],
+            baseline_cost,
         )
         v = version.version
-        client.set_model_version_tag(MODEL_NAME, v, "sub_triagem_rate", str(sub_triagem_rate))
+        client.set_model_version_tag(MODEL_NAME, v, "mean_cost", str(evaluate_result["mean_cost"]))
+        client.set_model_version_tag(
+            MODEL_NAME, v, "recall_urgente", str(evaluate_result["recall_urgente"])
+        )
         client.set_model_version_tag(MODEL_NAME, v, "elegivel_promocao", str(elegivel))
 
         return {
             "registered_version": version.version,
-            "f1_macro_teste": evaluate_result["f1_macro"],
-            "sub_triagem_rate": round(sub_triagem_rate, 4),
+            "recall_urgente_teste": evaluate_result["recall_urgente"],
+            "mean_cost_teste": round(evaluate_result["mean_cost"], 4),
             "elegivel_promocao": elegivel,
         }
 
