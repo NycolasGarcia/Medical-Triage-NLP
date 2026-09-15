@@ -88,16 +88,17 @@ flowchart LR
 
     ART --> API["API carrega no startup (Seção 3)"]
 
-    MLR -.->|planejado F6, ADR-0005| PROD["Promoção @production (manual até F6)"]
+    MLR -->|"scripts/promote_model.py --promote (caixa 6.10)"| PROD["@production (versão 5, ADR-0010)"]
 ```
 
 Comando manual equivalente às tasks `train`/`evaluate`/`register`:
 `make train` (`src/models/train.py`) treina e persiste; a avaliação no teste
 reservado e o registro no MLflow Registry só acontecem via DAG hoje. A DAG é
-parametrizada (`min_f1_macro`, `max_sub_triagem_increase` — ADR-0008) e roda
-ponta a ponta com evidência real em `docs/evidence/f4_dag_execucao_2026-09-14.md`.
-Promoção de stage (`@production`) continua decisão manual até a matriz de custo
-de ADR-0005 (F6) existir.
+parametrizada (`min_recall_urgente`, `max_cost_increase` — ADR-0008, critério
+atualizado em F6 para refletir a matriz de custo de ADR-0005; era
+`min_f1_macro`/`max_sub_triagem_increase` até então) e roda ponta a ponta com
+evidência real em `docs/evidence/f4_dag_execucao_2026-09-14.md`. Promoção de
+stage (`@production`) é decisão manual (caixa 6.10).
 
 ## 5. Contratos
 
@@ -130,4 +131,5 @@ decisão consciente registrada em `docs/model_card.md` (limitação 2), não bug
 | 0003 | Modelo base | aceito |
 | 0004 | Técnica de otimização de latência | aceito |
 | 0005 | Matriz de custo e política de limiar | aceito |
-| 0008 | Estratégia de retreino e critério de promoção | aceito |
+| 0008 | Estratégia de retreino e critério de promoção | supersedido por ADR-0010 (critério) |
+| 0010 | Critério de promoção atualizado (recall + custo) | aceito |

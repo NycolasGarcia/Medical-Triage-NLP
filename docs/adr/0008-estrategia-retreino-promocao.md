@@ -1,6 +1,7 @@
 # ADR-0008 — Estratégia de retreino e critério de promoção do modelo
 
-- **Status:** aceito
+- **Status:** supersedido por ADR-0010 (critério de promoção; estratégia geral de
+  gate humano continua vigente)
 - **Data:** 2026-09-14
 - **Fase:** F4
 - **Decisor:** Nycolas Garcia

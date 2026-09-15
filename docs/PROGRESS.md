@@ -1055,3 +1055,33 @@ Python customizado (marcação de negação), `analyzer="char_wb"` (char n-grama
   `test_onnx_parity.py`) — suíte em 77/77 verde.
 - Pendente para o fechamento de F6: caixa 6.10 (promoção no MLflow Registry) e
   6.11 (checkpoint de fechamento).
+
+### F6 — caixa 6.10 (promoção no MLflow Registry) · execução · 2026-09-15
+
+Achado ao preparar a promoção: o critério de elegibilidade de ADR-0008 (piso de
+F1-macro ≥ 0,70) **bloquearia o próprio modelo que ADR-0005/6.4 decidiu
+servir** — F1-macro do pipeline com limiar tunado é 0,523 no teste (era 0,728
+antes, caiu de propósito). ADR-0008 já previa este exato momento ("quando
+ADR-0005 for aceito... este ADR fica supersedido"). Resolvido com **ADR-0010**:
+critério trocado para recall de `urgente` (piso 0,85) + custo médio (sem
+regredir mais que +0,10 vs. produção) — estratégia de gate humano de ADR-0008
+não muda, só o número que decide elegibilidade.
+
+- Achado colateral: `evaluate_pipeline` (usada pela task `evaluate` da DAG)
+  avaliava com `pipeline.predict()` (argmax puro), não com `select_label`
+  (limiar real de produção, caixa 6.4) — corrigido; a DAG agora avalia a
+  política que de fato é servida, não uma diferente.
+- `scripts/promote_model.py` (novo): reproduz a lógica da task `register` da
+  DAG fora dela, mais o passo que a task não faz (trocar o alias
+  `@production`) — só troca com `--promote` explícito, mesmo quando elegível
+  (gate humano de verdade, não automação disfarçada).
+- Executado de verdade: versão 5 do modelo `triagem-urgencia` promovida a
+  `@production` (recall_urgente 0,8803 ≥ piso de 0,85; sem baseline anterior
+  para comparar custo). Confirmado consultando o MLflow Registry diretamente.
+- `airflow/dags/retrain_dag.py` atualizada (`min_recall_urgente`,
+  `max_cost_increase`) e validada com import real (não só sintaxe) antes de
+  aceitar a mudança — `AIRFLOW_HOME` configurado, `AIRFLOW__CORE__LOAD_EXAMPLES=False`,
+  módulo importa sem erro.
+- Evidência: `tests/test_promotion.py` reescrito para a nova assinatura, suíte
+  em 77/77 verde.
+- Pendente para o fechamento de F6: caixa 6.11 (checkpoint de fechamento).
