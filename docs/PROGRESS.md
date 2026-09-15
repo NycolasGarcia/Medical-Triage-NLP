@@ -1085,3 +1085,67 @@ não muda, só o número que decide elegibilidade.
 - Evidência: `tests/test_promotion.py` reescrito para a nova assinatura, suíte
   em 77/77 verde.
 - Pendente para o fechamento de F6: caixa 6.11 (checkpoint de fechamento).
+
+### CHECKPOINT — F6 «Modelo final e otimização de latência» · fechamento · 2026-09-15
+
+HARD REQUIREMENTS DA FASE
+- HR-6.1 otimização aplicada e ganho medido → ok (ONNX Runtime, p95 -58,3%,
+  `docs/LATENCY.md`)
+- HR-6.2 paridade numérica entre modelo original e otimizado → ok
+  (`tests/test_onnx_parity.py`, tolerância 0,05, divergência real medida
+  0,0024 média / 0,0316 máxima)
+- HR-6.3 política de custo/limiar decidida em ADR → ok (ADR-0005 aceito,
+  matriz + alvo de recall + limiares numéricos)
+- HR-6.4 modelo em `Production` no Registry → ok (`triagem-urgencia` versão 5,
+  alias `@production`, confirmado consultando o Registry diretamente)
+
+PORTÕES NUMÉRICOS
+
+| Portão | Alvo | Medido | Status |
+|---|---|---|---|
+| Ganho de latência p95 medido e registrado em % | sim | -58,3% (7,01→2,92 ms) | ok |
+| Paridade ONNX verde | sim | 2/2 testes, tolerância 0,05 | ok |
+| Recall de `urgente` ≥ alvo do ADR-0005 | ≥ 0,90 | 0,9026 (CV, out-of-fold pooled) | ok |
+| Modelo em `Production` | sim | versão 5 | ok |
+
+ESTADO
+- Caixas da fase: 11/11 → micro 100%
+- Progresso macro: **81,0%** (66,0% herdado de F5 + 15,0% de F6, peso cheio)
+- Rubrica tocada por esta fase: R1 (15%) — fase mapeia 1:1 com o critério
+
+SITUAÇÃO
+- Feito: tuning de representação (6.1, +char n-gramas/negação, F1-macro
+  +0,0028 sobre F2); calibração isotônica (6.2, sub-triagem -21% já antes de
+  qualquer limiar); matriz de custo aplicada à seleção de modelo (6.3,
+  confirma LogReg mesmo sob custo explícito); limiar cumulativo (6.4/ADR-0005,
+  custo médio -45 a -48%, meta de recall batida); análise qualitativa de
+  erros (6.5, achado principal: teto de qualidade do mapeamento heurístico de
+  rótulo, não falha do modelo); export ONNX com duas variantes servíveis via
+  flag (6.6-6.9/ADR-0004, p95 -58,3%, imagem Docker -32,4% como achado
+  colateral); critério de promoção atualizado e modelo promovido de fato
+  (6.10/ADR-0010).
+- 4 ADRs novos/atualizados nesta fase: ADR-0004 (aceito), ADR-0005 (aceito),
+  ADR-0008 (supersedido por ADR-0010 quanto ao critério), ADR-0010 (aceito).
+  ADR-0003 recebeu 2 atualizações (ordinal descartado em 6.1, LogReg
+  reconfirmado sob custo em 6.3) sem ser supersedido — decisão original
+  manteve-se válida nos dois casos.
+- Achados reais que mudaram o rumo do trabalho, não hipóteses: skl2onnx não
+  converte char n-gramas nem preprocessador customizado nem
+  `CalibratedClassifierCV` com pipeline de texto (forçou a arquitetura de duas
+  variantes); recall de `normal` desaba para 0,04 com o limiar tunado (efeito
+  colateral real da assimetria de custo, mantido após revisão do autor);
+  `mlflow.sklearn.log_model` recusa serializar callables/classes fora da
+  allowlist da skops (corrigido com `skops_trusted_types` explícito, não
+  bypass geral); locale UTF-8 ausente quebra o `StringNormalizer` do ONNX em
+  container (não aparecia local); critério de promoção antigo (F1-macro)
+  bloquearia o próprio modelo que a fase decidiu servir.
+- Bloqueios / decisões pendentes do autor: nenhum — a única decisão em aberto
+  durante a fase (reabrir ou não a matriz de custo após ver o recall de
+  `normal` cair) foi resolvida pelo autor após ver `docs/error_analysis.md`
+  (manter a matriz como está).
+- Riscos observados: dois pipelines de produção para manter (`sklearn` e
+  `onnx`), não um — se a representação vencedora mudar no futuro, o backend
+  ONNX não se atualiza sozinho (documentado em ADR-0004, "Como revisitar").
+
+VEREDITO: **PODE AVANÇAR para F7** — todos os hard requirements de F6
+fechados, nenhuma exceção pendente.
