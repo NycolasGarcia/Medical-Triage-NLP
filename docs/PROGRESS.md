@@ -975,3 +975,34 @@ médio da matriz de 6.3, com o primeiro já fixado).
   `docs/EXPERIMENTS.md` (seção F6), 8 testes novos (`test_threshold.py`,
   `test_threshold_search.py`) — suíte em 72/72 verde, cobertura 64%.
 - Pendente para o fechamento de F6: caixas 6.5 a 6.11.
+
+### F6 — caixa 6.5 (análise qualitativa de erros) · execução · 2026-09-15
+
+`docs/error_analysis.md`: leitura manual de amostras reais dos 4 tipos de erro
+(distância ordinal -2/-1/+1/+2) no teste reservado, motivada pela pergunta em
+aberto do autor sobre o recall de `normal` ter caído a 0,04 em ADR-0005 (o
+autor pediu para ver esta análise antes de decidir se reabre a matriz de
+custo — resposta registrada aqui, decisão final ainda com o autor).
+
+- **Achado principal**: boa parte do que a matriz de confusão chama de "erro"
+  é o teto de qualidade do mapeamento heurístico de ADR-0001 sendo
+  alcançado, não falha de representação/calibração/limiar. Confirmado nas
+  duas direções com exemplos reais: `normal`→`urgente` (246 casos) são em
+  boa parte artigos de pesquisa básica sobre temas graves ("ventricular
+  fibrillation", "rupture of thoracic aorta") categorizados `normal` só por
+  não caírem na categoria "cardiovascular" original; `urgente`→`atenção`/
+  `normal` (94 casos, incluindo os 5 piores erros de 2 níveis) são artigos
+  de epidemiologia/metodologia sobre temas cardiovasculares/neurológicos mas
+  com texto administrativo, sem urgência aparente.
+- Hipóteses descartadas com evidência: tamanho de texto (sem diferença entre
+  acerto/erro); negação mal tratada (checagem grosseira não mostrou padrão
+  causal — a evidência real sobre negação continua sendo a comparação
+  controlada em CV de 6.1).
+- Resposta à pergunta pendente sobre a matriz de custo: recall de `normal`
+  baixo tem duas causas empilhadas — a assimetria do limiar (reversível
+  ajustando a matriz) e o teto de qualidade do rótulo (não reversível por
+  ajuste de limiar/matriz, só por revisar ADR-0001 ou trocar de dataset,
+  fora do escopo de F6). Reabrir a matriz reduziria a contagem de
+  sobre-triagem mas não eliminaria essa segunda categoria de erro.
+- Pendente para o fechamento de F6: caixas 6.6 a 6.11 — e a decisão do autor
+  sobre reabrir ou não a matriz de custo, informada por esta análise.
