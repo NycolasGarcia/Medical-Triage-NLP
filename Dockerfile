@@ -13,10 +13,18 @@ COPY models/ models/
 
 FROM python:3.11-slim AS runtime
 
-# libgomp1: LightGBM (candidato de F2, ver ADR-0003) precisa de OpenMP em runtime.
+# libgomp1: onnxruntime (caixa 6.6) usa OpenMP para paralelismo interno em runtime.
+# locales: o operador StringNormalizer do onnxruntime (parte do TfidfVectorizer
+# exportado) falha na inicialização sem um locale UTF-8 disponível — a imagem slim
+# não vem com nenhum instalado; achado real ao testar o backend ONNX em container
+# (não aparecia rodando local fora de container, onde o locale do host já existe).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgomp1 \
+    && apt-get install -y --no-install-recommends libgomp1 locales \
+    && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
+    && locale-gen \
     && rm -rf /var/lib/apt/lists/*
+
+ENV LANG=en_US.UTF-8 LANGUAGE=en_US:en LC_ALL=en_US.UTF-8
 
 RUN useradd --create-home --shell /usr/sbin/nologin appuser
 WORKDIR /app
