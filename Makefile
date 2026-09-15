@@ -1,4 +1,4 @@
-.PHONY: setup lint test run train stack-up stack-down bench
+.PHONY: setup lint test run train stack-up stack-down bench load-test
 
 setup:
 	uv sync
@@ -24,3 +24,6 @@ stack-down:
 
 bench:
 	uv run python -m scripts.benchmark
+
+load-test:
+	uv run python -m scripts.load_test
