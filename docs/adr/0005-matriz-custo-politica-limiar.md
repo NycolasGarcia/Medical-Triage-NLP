@@ -102,3 +102,13 @@ de sobre-triagem que pareça ruído em vez de custo aceitável; o dataset mudar
 sobre-triagem é operacionalmente inviável mesmo sendo o ótimo de custo sob os pesos
 atuais — nesse caso, o ajuste correto é a matriz de custo (§14), não o código do
 limiar, já que o limiar só implementa fielmente o que a matriz pede.
+
+### Revisão do autor (2026-09-15, após caixa 6.5)
+
+`docs/error_analysis.md` mostrou que o recall baixo de `normal` tem duas causas
+empilhadas: a assimetria do limiar (reversível pela matriz) e o teto de qualidade
+do mapeamento de rótulo de ADR-0001 (não reversível pela matriz — confirmado com
+exemplos reais de texto nas duas direções de erro). Diante disso, o autor decidiu
+**manter a matriz como está** — reabri-la resolveria só a primeira causa, mantendo a
+segunda intacta, custo de mudança sem solução completa. Matriz e limiares deste ADR
+seguem vigentes sem alteração.
