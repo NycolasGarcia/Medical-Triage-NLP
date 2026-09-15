@@ -1,7 +1,7 @@
-.PHONY: setup lint test run train stack-up stack-down bench load-test
+.PHONY: setup lint test run train train-onnx stack-up stack-down bench load-test
 
 setup:
-	uv sync
+	uv sync --group training
 	uv run pre-commit install
 
 lint:
@@ -15,6 +15,9 @@ run:
 
 train:
 	uv run python -m src.models.train
+
+train-onnx:
+	uv run python -m src.optimization.onnx_export
 
 stack-up:
 	docker compose up -d

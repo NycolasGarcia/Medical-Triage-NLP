@@ -8,9 +8,7 @@ authors = [
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "fastapi>=0.141.1",
-    "lightgbm>=4.7.0",
-    "mlflow>=3.16.0",
-    "mord>=0.7",
+    "onnxruntime>=1.30.0",
     "pandas>=3.0.5",
     "prometheus-client>=0.26.0",
     "pydantic-settings>=2.0",
@@ -30,9 +28,19 @@ dev = [
     "nbconvert>=7.17.1",
     "pandera>=0.33.1",
     "httpx>=0.28.1",
+    "skl2onnx>=1.20.0",
 ]
 orchestration = [
     "apache-airflow>=3.2.2",
+]
+# mlflow/lightgbm/mord só entram em scripts de treino/experimentação (src/models/,
+# src/optimization/onnx_export.py) — nunca em src/api/. Separado de `dependencies`
+# para não inflar a imagem de serving (`uv sync --no-dev` do Dockerfile já excluía
+# `dev`/`orchestration`; achado pendente desde F3/docs/LATENCY.md, fechado aqui).
+training = [
+    "lightgbm>=4.7.0",
+    "mlflow>=3.16.0",
+    "mord>=0.7",
 ]
 
 [tool.uv]

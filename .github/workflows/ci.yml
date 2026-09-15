@@ -16,7 +16,7 @@ jobs:
         with:
           enable-cache: true
 
-      - run: uv sync
+      - run: uv sync --group training
 
       - run: uv run ruff check .
 
@@ -30,7 +30,7 @@ jobs:
         with:
           enable-cache: true
 
-      - run: uv sync
+      - run: uv sync --group training
 
       # Sem remote acessível no runner: reconstrói os dados direto da fonte
       # canônica (GitHub, sem credencial) em vez de `dvc pull`.
@@ -48,11 +48,14 @@ jobs:
         with:
           enable-cache: true
 
-      - run: uv sync
+      - run: uv sync --group training
 
       - run: uv run dvc repro
 
-      # A imagem copia models/ no build — precisa existir um artefato antes.
+      # A imagem copia models/ no build — precisa existir os dois artefatos antes
+      # (model.joblib para MODEL_BACKEND=sklearn, model.onnx+calibrador para
+      # MODEL_BACKEND=onnx, caixa 6.6/ADR-0004).
       - run: uv run python -m src.models.train
+      - run: uv run python -m src.optimization.onnx_export
 
       - run: docker build -t medical-triage-nlp:ci .
