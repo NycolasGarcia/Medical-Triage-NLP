@@ -117,3 +117,20 @@ representação vencedora — não é evidência de que classificação ordinal 
 para o problema, é evidência de que os hiperparâmetros padrão não servem nesta
 representação de alta dimensão. Ver `docs/EXPERIMENTS.md`, seção F6, para a tabela
 completa e a leitura dos 12 runs.
+
+## Atualização — caixa 6.3 (F6, 2026-09-15)
+
+A dívida "Como revisitar" acima está fechada, com resultado, não só reaberta.
+Comparação Regressão Logística vs. Multinomial NB refeita sob a matriz de custo de
+`src/models/cost.py` (§7/§14), com a representação vencedora de 6.1 e a calibração
+isotônica de 6.2 aplicadas igualmente aos dois candidatos: **LogReg venceu em toda
+métrica**, inclusive custo médio (1,1749 vs. 1,3812 do NB) — a hipótese de que o NB
+viraria vencedor sob custo explícito **não se confirmou**. A vantagem de sub-triagem
+que o NB tinha em F2 (6,9% vs. 11,8% da LogReg, sob TF-IDF simples e sem calibração)
+não se repete sob as condições atuais — a calibração isotônica de 6.2 reduz a
+sub-triagem da LogReg de forma deliberada e medida (para 9,3%), superando a vantagem
+"acidental" que o NB tinha por natureza do algoritmo. Ver `docs/EXPERIMENTS.md`,
+seção "Matriz de custo aplicada à seleção de modelo", para a tabela completa.
+
+Decisão deste ADR (Regressão Logística como modelo de produção) confirmada, não
+supersedida.

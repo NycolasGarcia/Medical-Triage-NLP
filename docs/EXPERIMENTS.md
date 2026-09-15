@@ -212,3 +212,41 @@ produção: `train_and_persist()` agora separa 20% do treino como fatia de calib
 `model.joblib` passa a ser um `CalibratedClassifierCV` envolvendo a representação
 vencedora de 6.1, não mais o pipeline cru. Ajuste de limiar (caixa 6.4) parte desta
 calibração, não da probabilidade não-calibrada.
+
+## F6 — Matriz de custo aplicada à seleção de modelo (caixa 6.3)
+
+`src/models/cost.py` implementa a matriz de §7/§14 (sub-triagem 5/15 por
+nível, sobre-triagem 1/2) e `mean_cost()`. ADR-0003 ("Como revisitar")
+já previa reabrir a comparação Regressão Logística vs. Multinomial NB quando a
+matriz entrasse em vigor — feito aqui, com a representação vencedora de 6.1 e a
+calibração isotônica de 6.2 aplicadas igualmente aos dois candidatos (a
+comparação original de F2 usava TF-IDF simples sem calibração; não seria
+comparação justa reaproveitar aquele número).
+
+| Modelo | F1 macro | Recall `urgente` | Custo médio | Sub-triagem % | Sobre-triagem % |
+|---|---|---|---|---|---|
+| Regressão Logística — **vencedor** | **0,7235** | **0,8154** | **1,1749** | 9,3% | 17,1% |
+| Multinomial NB | 0,6991 | 0,7852 | 1,3812 | 11,7% | 17,4% |
+
+Custo médio do pipeline de produção (representação 6.1 + LogReg + calibração 6.2)
+no **teste reservado** (nunca tocado em CV): **1,290** — próximo do 1,175 medido em
+CV, sem sinal de overfitting no ajuste de calibração.
+
+### Leitura
+
+**A hipótese registrada em ADR-0003 não se confirmou.** Em F2, Multinomial NB tinha
+a menor sub-triagem do grupo (6,9%) e era cotado como "principal candidato a
+revisitar quando a matriz de custo entrasse em jogo". Sob as mesmas condições atuais
+(representação de 6.1, calibração isotônica de 6.2) para os dois candidatos, LogReg
+vence em **toda** métrica, inclusive custo médio — a vantagem de sub-triagem que o NB
+tinha em F2 era, em boa parte, um efeito de suas probabilidades já saírem menos
+polarizadas por natureza do algoritmo (Naive Bayes tende a estimar probabilidade mal
+calibrada, mas "por acidente" na direção segura para este problema); a calibração
+isotônica da caixa 6.2 recupera esse mesmo efeito para a LogReg de forma deliberada e
+medida, sem abrir mão da qualidade geral que o NB nunca teve.
+
+### Decisão
+
+Modelo de produção **permanece Regressão Logística** (ADR-0003 não é supersedido —
+a hipótese que motivaria a mudança foi testada e não se sustentou). Fechada a
+dívida "Como revisitar" do ADR-0003 com resultado registrado, não só reaberta.

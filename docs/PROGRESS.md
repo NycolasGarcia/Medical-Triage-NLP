@@ -921,3 +921,26 @@ via `FrozenEstimator` (achado: sklearn removeu `cv="prefit"` na versão em uso,
   leitura em `docs/EXPERIMENTS.md` (seção F6), 5 testes novos
   (`test_calibration.py`) — suíte em 57/57 verde, cobertura 68%.
 - Pendente para o fechamento de F6: caixas 6.3 a 6.11.
+
+### F6 — caixa 6.3 (matriz de custo) · execução · 2026-09-15
+
+`src/models/cost.py`: matriz 3x3 de §7/§14 (sub-triagem 5/15 por nível de
+distância ordinal, sobre-triagem 1/2), `mean_cost()`/`total_cost()`.
+
+- Usada para fechar a dívida "Como revisitar" do ADR-0003: comparação
+  Regressão Logística vs. Multinomial NB (menor sub-triagem em F2) refeita
+  sob custo explícito, com a representação de 6.1 e a calibração isotônica
+  de 6.2 aplicadas igualmente aos dois.
+- Resultado, ao contrário da hipótese registrada em F2/ADR-0003: **LogReg
+  venceu em toda métrica**, inclusive custo médio (1,1749 vs. 1,3812 do NB).
+  A vantagem de sub-triagem que o NB tinha em F2 não se repetiu — a
+  calibração isotônica já recupera esse efeito para a LogReg de forma
+  deliberada, superando a vantagem "acidental" do NB.
+- Custo médio do pipeline de produção no teste reservado: 1,290 (vs. 1,175
+  em CV — sem sinal de overfitting na calibração).
+- ADR-0003 atualizado (seção "Atualização — caixa 6.3"): decisão de modelo
+  confirmada, não supersedida.
+- Evidência: 2 runs no MLflow (`f6_cost_logreg`/`f6_cost_multinomial_nb`),
+  tabela e leitura em `docs/EXPERIMENTS.md` (seção F6), 7 testes novos
+  (`test_cost.py`) — suíte verde.
+- Pendente para o fechamento de F6: caixas 6.4 a 6.11.
