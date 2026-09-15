@@ -32,8 +32,9 @@ flowchart LR
     EP --> VAL{Pydantic válido?}
     VAL -->|não| ERR["422 Unprocessable Entity"]
     VAL -->|sim| VEC["FeatureUnion.transform (TF-IDF palavra + char n-gramas, F6)"]
-    VEC --> CLF[LogisticRegression.predict_proba]
-    CLF --> RESP["label + probabilities + model_version"]
+    VEC --> CLF["CalibratedClassifierCV.predict_proba (LogReg + isotônica, F6)"]
+    CLF --> THR["select_label: limiar cumulativo (ADR-0005), não argmax"]
+    THR --> RESP["label + probabilities + model_version"]
     RESP --> MW
     ERR --> MW
     MW -->|"log JSON: request_id, latencia_ms, classe_predita"| LOG[(stdout)]
@@ -120,5 +121,5 @@ decisão consciente registrada em `docs/model_card.md` (limitação 2), não bug
 | 0002 | Arquitetura de deploy (batch vs. real-time) | aceito |
 | 0003 | Modelo base | aceito |
 | 0004 | Técnica de otimização de latência | planejado (F6) |
-| 0005 | Matriz de custo e política de limiar | planejado (F6) |
+| 0005 | Matriz de custo e política de limiar | aceito |
 | 0008 | Estratégia de retreino e critério de promoção | aceito |

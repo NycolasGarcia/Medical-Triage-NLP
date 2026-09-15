@@ -20,8 +20,8 @@ Detalhes:
 
 [![CI](https://github.com/NycolasGarcia/Medical-Triage-NLP/actions/workflows/ci.yml/badge.svg)](https://github.com/NycolasGarcia/Medical-Triage-NLP/actions/workflows/ci.yml)
 ![Version](https://img.shields.io/badge/version-0.1.0-darkgrey?style=flat)
-![Tests](https://img.shields.io/badge/tests-57%20passing-brightgreen?style=flat)
-![Coverage](https://img.shields.io/badge/coverage-68%25-yellow?style=flat)
+![Tests](https://img.shields.io/badge/tests-72%20passing-brightgreen?style=flat)
+![Coverage](https://img.shields.io/badge/coverage-64%25-yellow?style=flat)
 ![Ruff](https://img.shields.io/badge/ruff-passing-brightgreen?style=flat)
 ![F1 Macro](https://img.shields.io/badge/F1--macro%20(teste)-0.728-blue?style=flat)
 ![Recall Urgente](https://img.shields.io/badge/recall%20urgente%20(teste)-0.769-blue?style=flat)
@@ -306,7 +306,11 @@ requisição). Middleware loga `request_id`, latência e classe predita por requ
 
 **Testando via Swagger UI:** `make run`, abra `http://localhost:8000/docs`, expanda
 `POST /predict`, **Try it out** e cole um payload abaixo (texto em **inglês** — ver
-nota sobre idioma em [Dataset](#dataset)).
+nota sobre idioma em [Dataset](#dataset)). Desde a caixa 6.4/ADR-0005, a API decide
+por limiar deliberadamente enviesado contra sub-triagem, não por probabilidade
+máxima — `normal` só sai com alta confiança (o segundo exemplo abaixo é um laudo
+real do conjunto de teste, não uma frase curta sintética, porque frases curtas
+ambíguas quase sempre escalam para `atenção` com o limiar atual).
 
 <details>
 <summary><strong>Laudo urgente</strong> — choque cardiogênico → <code>"label": "urgente"</code> (72,9%)</summary>
@@ -320,11 +324,11 @@ nota sobre idioma em [Dataset](#dataset)).
 </details>
 
 <details>
-<summary><strong>Laudo normal</strong> — checkup de rotina → <code>"label": "normal"</code> (65,9%)</summary>
+<summary><strong>Laudo normal</strong> — infecção urinária pós-operatória, sem achados graves → <code>"label": "normal"</code> (98,5%)</summary>
 
 ```json
 {
-  "text": "Well-child visit, growth and development within normal limits, no concerns reported."
+  "text": "Postoperative urinary tract infection in gynecology: implications for an antibiotic prophylaxis policy. A prospective observational study of postoperative infection after gynecologic surgery assessed the need for antibiotic prophylaxis with special reference to the urinary tract. Catheterization requirements in the postoperative period were compared with the development of urinary tract infection after excluding both preoperative and postoperative bacteriuria. Forty-six of 115 patients (40%) developed a urinary tract infection in the postoperative period. Furthermore, this was not clearly related to the need for postoperative catheterization. Significant wound and vaginal vault infections were uncommon, indicating that antibiotic prophylaxis should be directed specifically at the urinary tract."
 }
 ```
 

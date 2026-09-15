@@ -250,3 +250,61 @@ medida, sem abrir mão da qualidade geral que o NB nunca teve.
 Modelo de produção **permanece Regressão Logística** (ADR-0003 não é supersedido —
 a hipótese que motivaria a mudança foi testada e não se sustentou). Fechada a
 dívida "Como revisitar" do ADR-0003 com resultado registrado, não só reaberta.
+
+## F6 — Ajuste de limiar (caixa 6.4, ADR-0005)
+
+Busca em duas etapas sobre probabilidades calibradas *out-of-fold* (5 dobras, sem
+vazamento): `THRESHOLD_URGENTE` (maior valor que cumpre `recall_urgente >= 0,90`),
+depois `THRESHOLD_ATENCAO` (minimiza custo médio com o primeiro fixado). Detalhes da
+regra e das alternativas descartadas em **ADR-0005**.
+
+| Métrica | Argmax (política antiga) | Limiar tunado — **vencedor** | CV (8.980) ou teste (2.245) |
+|---|---|---|---|
+| Recall `urgente` | 0,8154 | **0,9026** | CV |
+| Recall `urgente` | 0,7987 | **0,8803** | Teste reservado |
+| Custo médio | 1,1747 | **0,6449** (-45%) | CV |
+| Custo médio | 1,2904 | **0,6717** (-48%) | Teste reservado |
+| Sub-triagem % | 9,3% | **3,4%** | CV |
+| Sub-triagem % | 10,3% | **4,3%** | Teste reservado |
+| Sobre-triagem % | 17,1% | 33,4% | CV |
+| Sobre-triagem % | 15,9% | 32,6% | Teste reservado |
+
+Limiares escolhidos: `THRESHOLD_URGENTE = 0,31`, `THRESHOLD_ATENCAO = 0,09`
+(`src/models/threshold.py`).
+
+Recall por classe no teste reservado (2.245 amostras):
+
+| Classe | Argmax | Limiar tunado |
+|---|---|---|
+| `normal` | 0,5449 | **0,0435** |
+| `atenção` | 0,8583 | 0,9291 |
+| `urgente` | 0,7987 | 0,8803 |
+
+### Leitura
+
+**Meta de recall de `urgente` (0,90, §14) atingida em CV** (0,9026) — no teste
+reservado (nunca tocado na busca de limiar) ficou em 0,8803, abaixo do alvo por
+variância amostral de um conjunto 4× menor (2.245 vs. 8.980), não uma contradição.
+Registrado com transparência: a garantia formal é sobre a estimativa de CV, o teste
+reservado é uma segunda leitura, não a fonte da decisão.
+
+**Custo médio caiu quase pela metade nos dois conjuntos** (-45% CV, -48% teste) — a
+combinação calibração (6.2) + limiar (6.4) entrega o essencial do que a matriz de
+custo (6.3) pede, sem precisar reabrir modelo ou representação.
+
+**Troca aceita conscientemente**: sobre-triagem quase dobra (17,1%→33,4% em CV) e
+acerto exato cai (73,6%→63,1%) — é o preço de reduzir sub-triagem de 9,3% para 3,4%.
+Consistente com §7 chamar sobre-triagem de "caro, mas seguro".
+
+**Achado mais forte, não previsto antes de rodar**: o recall de `normal` desaba de
+0,5449 para **0,0435** — o modelo praticamente para de prever `normal` (31 de 712
+casos reais). Matematicamente correto dado o custo assimétrico, mas muda o caráter
+do sistema: deixa de ser 3-vias equilibrado e vira, na prática, um filtro "isto
+claramente não é normal?". Discutido com mais detalhe (incluindo o que fazer se for
+operacionalmente inviável) em ADR-0005.
+
+### Decisão
+
+`src/api/main.py` usa `select_label()` (limiar cumulativo) em vez de
+`max(probabilities)`. Ver ADR-0005 para a política completa, alternativas
+descartadas e condições de reabertura.

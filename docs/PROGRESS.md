@@ -944,3 +944,34 @@ distância ordinal, sobre-triagem 1/2), `mean_cost()`/`total_cost()`.
   tabela e leitura em `docs/EXPERIMENTS.md` (seção F6), 7 testes novos
   (`test_cost.py`) — suíte verde.
 - Pendente para o fechamento de F6: caixas 6.4 a 6.11.
+
+### F6 — caixa 6.4 (ajuste de limiar, ADR-0005) · execução · 2026-09-15
+
+`src/models/threshold.py` + `src/models/threshold_search.py`: regra de decisão
+por limiar cumulativo sobre probabilidades calibradas (6.2), substituindo o
+argmax puro na API. Busca em duas etapas sobre probabilidades *out-of-fold*
+de 5 dobras (sem vazamento): `THRESHOLD_URGENTE` (maior valor que cumpre
+`recall_urgente >= 0,90`, §14), depois `THRESHOLD_ATENCAO` (minimiza custo
+médio da matriz de 6.3, com o primeiro já fixado).
+
+- Limiares encontrados: `THRESHOLD_URGENTE = 0,31`, `THRESHOLD_ATENCAO = 0,09`.
+- Meta de recall atingida em CV (0,9026 ≥ 0,90); no teste reservado ficou em
+  0,8803 — abaixo do alvo por variância amostral (conjunto 4x menor), não
+  contradição, registrado com transparência.
+- Custo médio caiu quase pela metade nos dois conjuntos: -45% (CV, 1,1747→0,6449)
+  e -48% (teste, 1,2904→0,6717). Sub-triagem caiu de ~9-10% para ~3-4%.
+- **Achado mais forte, não previsto antes de rodar**: recall de `normal`
+  desaba de 0,5449 para 0,0435 no teste — o sistema praticamente para de
+  prever `normal` (troca matematicamente correta dada a assimetria de custo,
+  mas muda o caráter do sistema; registrado com destaque em ADR-0005 como
+  prioridade para a leitura qualitativa de erros de 6.5).
+- `src/api/main.py` atualizado: usa `select_label()` em vez de
+  `max(probabilities)`. Dois exemplos do README precisaram ser revisados —
+  o exemplo de "normal" sintético virou "atenção" com o novo limiar; trocado
+  por um laudo real do conjunto de teste com alta confiança.
+- ADR-0005 aceito, com alternativas descartadas (argmax, regra bayesiana de
+  custo mínimo, grade 2D completa) e condição explícita de reabertura.
+- Evidência: MLflow (`busca_limiar_concluida`), tabela e leitura em
+  `docs/EXPERIMENTS.md` (seção F6), 8 testes novos (`test_threshold.py`,
+  `test_threshold_search.py`) — suíte em 72/72 verde, cobertura 64%.
+- Pendente para o fechamento de F6: caixas 6.5 a 6.11.
