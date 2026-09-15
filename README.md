@@ -412,7 +412,8 @@ medical-triage-nlp/
   - [x] Tuning de representação (ADR implícito em EXPERIMENTS.md) + calibração isotônica (Brier/ECE medidos)
   - [x] Matriz de custo assimétrica + ajuste de limiar por classe (ADR-0005), análise qualitativa de erros
   - [x] Export ONNX + benchmark comparativo (-58,3% no p95), backend alternável por flag (ADR-0004)
-  - [ ] Promoção do modelo no Registry (ADR-0008), Model Card final, README final, vídeo STAR
+  - [x] Promoção do modelo no Registry (ADR-0010, critério atualizado — versão 5 em `@production`)
+  - [ ] Model Card final, README final, vídeo STAR
 
 Progresso completo (checkpoints, portões numéricos, evidências) em
 [docs/PROGRESS.md](docs/PROGRESS.md).
