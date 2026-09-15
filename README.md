@@ -20,8 +20,8 @@ Detalhes:
 
 [![CI](https://github.com/NycolasGarcia/Medical-Triage-NLP/actions/workflows/ci.yml/badge.svg)](https://github.com/NycolasGarcia/Medical-Triage-NLP/actions/workflows/ci.yml)
 ![Version](https://img.shields.io/badge/version-0.1.0-darkgrey?style=flat)
-![Tests](https://img.shields.io/badge/tests-52%20passing-brightgreen?style=flat)
-![Coverage](https://img.shields.io/badge/coverage-69%25-yellow?style=flat)
+![Tests](https://img.shields.io/badge/tests-57%20passing-brightgreen?style=flat)
+![Coverage](https://img.shields.io/badge/coverage-68%25-yellow?style=flat)
 ![Ruff](https://img.shields.io/badge/ruff-passing-brightgreen?style=flat)
 ![F1 Macro](https://img.shields.io/badge/F1--macro%20(teste)-0.728-blue?style=flat)
 ![Recall Urgente](https://img.shields.io/badge/recall%20urgente%20(teste)-0.769-blue?style=flat)
@@ -309,7 +309,7 @@ requisição). Middleware loga `request_id`, latência e classe predita por requ
 nota sobre idioma em [Dataset](#dataset)).
 
 <details>
-<summary><strong>Laudo urgente</strong> — choque cardiogênico → <code>"label": "urgente"</code> (88,0%)</summary>
+<summary><strong>Laudo urgente</strong> — choque cardiogênico → <code>"label": "urgente"</code> (72,9%)</summary>
 
 ```json
 {
@@ -320,11 +320,11 @@ nota sobre idioma em [Dataset](#dataset)).
 </details>
 
 <details>
-<summary><strong>Laudo normal</strong> — checkup de rotina → <code>"label": "normal"</code> (42,6%)</summary>
+<summary><strong>Laudo normal</strong> — checkup de rotina → <code>"label": "normal"</code> (65,9%)</summary>
 
 ```json
 {
-  "text": "Routine follow-up examination, patient stable, no significant findings, general checkup."
+  "text": "Well-child visit, growth and development within normal limits, no concerns reported."
 }
 ```
 

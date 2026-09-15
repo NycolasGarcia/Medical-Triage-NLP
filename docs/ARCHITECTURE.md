@@ -49,9 +49,11 @@ flowchart LR
 **Startup (não por requisição):** o `lifespan` do FastAPI carrega
 `models/current/model.joblib` (pipeline `FeatureUnion` — TF-IDF de palavra
 bigrama + TF-IDF de char n-grama (3,5) + marcação de negação — `LogisticRegression`,
-representação vencedora da caixa 6.1, persistido por `src/models/train.py`) uma única
-vez em `app.state.pipeline` — decisão de F3, registrada em `src/api/main.py` (não
-abriu ADR próprio: escolha padrão de baixo risco, ver `docs/PROGRESS.md`).
+representação vencedora da caixa 6.1 — envolvido por `CalibratedClassifierCV`
+isotônica, caixa 6.2, ajustada numa fatia de 20% do treino separada do ajuste da
+representação — persistido por `src/models/train.py`) uma única vez em
+`app.state.pipeline` — decisão de F3, registrada em `src/api/main.py` (não abriu
+ADR próprio: escolha padrão de baixo risco, ver `docs/PROGRESS.md`).
 
 `/metrics` (F5) expõe `http_requests_total`, `http_request_duration_seconds`
 (histograma), `http_errors_total` e `predictions_total` (métrica de negócio —
@@ -99,7 +101,7 @@ de ADR-0005 (F6) existir.
 ```json
 {
   "label": "urgente",
-  "probabilities": { "atencao": 0.006, "normal": 0.219, "urgente": 0.776 },
+  "probabilities": { "atencao": 0.0, "normal": 0.366, "urgente": 0.634 },
   "model_version": "f6-logreg-negation-charngrams"
 }
 ```

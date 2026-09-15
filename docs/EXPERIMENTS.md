@@ -159,3 +159,56 @@ com regularização mais forte, se o tempo do projeto permitir.
 atualizado para usar essa representação no artefato servido pela API. Ganho de
 F1-macro sobre o TF-IDF original de F2: **+0,0028** (0,731 → 0,7338) — modesto, mas
 real e medido em CV, não em uma única leitura de teste.
+
+## F6 — Calibração de probabilidade (caixa 6.2)
+
+§7 é explícito: calibrar **antes** de ajustar limiar (caixa 6.4), senão o ajuste é
+"chute com aparência de método". Protocolo: 5 dobras externas (seed 42, igual às
+demais caixas) — em cada uma, separa 20% do treino da dobra como fatia de calibração
+(estratificada), ajusta representação vencedora de 6.1 + LogReg só no restante (80%),
+calibra (Platt/sigmoide ou isotônica) só na fatia separada via `FrozenEstimator`
+(sklearn ≥ 1.6 — substitui o antigo `cv="prefit"`, removido nesta versão do sklearn).
+Compara contra a mesma pipeline **sem** recalibrar ("none").
+
+| Método | F1 macro | F1 weighted | ROC-AUC OvR | Recall `urgente` | Brier multiclasse | ECE `urgente` | Sub-triagem % | Sobre-triagem % |
+|---|---|---|---|---|---|---|---|---|
+| `none` (sem recalibrar) | 0,7297 | 0,7322 | 0,8793 | 0,7858 | 0,3798 | 0,0417 | 12,1% | 14,4% |
+| `sigmoid` (Platt) | 0,7288 | 0,7316 | 0,8811 | 0,8109 | 0,3746 | 0,0351 | 10,3% | 16,0% |
+| `isotonic` — **vencedora** | 0,7235 | 0,7266 | 0,8795 | **0,8154** | **0,3744** | **0,0184** | **9,3%** | 17,1% |
+
+Curva de calibração (reliability diagram, classe `urgente` one-vs-rest, 3 métodos
+sobrepostos): `docs/evidence/f6_calibration_curve_2026-09-15.png`.
+
+Nota sobre o F1-macro de `none` aqui (0,7297) ser um pouco menor que o da caixa 6.1
+(0,7338, mesma config de representação): a diferença é o próprio protocolo desta
+caixa — aqui o pipeline treina só nos 80% de cada dobra (20% vira fatia de
+calibração), enquanto em 6.1 treinava nos 100% da dobra. Queda esperada, não é
+regressão da representação.
+
+### Leitura dos resultados
+
+**Calibração isolada, sem qualquer ajuste de limiar, já reduz sub-triagem de forma
+mensurável**: 12,1% (`none`) → 10,3% (`sigmoid`) → **9,3%** (`isotonic`) — quase 3
+pontos percentuais só de recalibrar as probabilidades, antes da caixa 6.4 sequer
+existir. Recall de `urgente` sobe na mesma direção (0,786 → 0,815). Isso acontece
+porque a calibração é ajustada por classe (one-vs-rest) e pode mudar a ordem relativa
+das probabilidades entre classes para uma mesma amostra — não é uma transformação
+cosmética que preserva o argmax, como pareceria à primeira vista.
+
+**Isotônica vence em toda métrica de calibração** (menor Brier, muito menor ECE — menos
+da metade do Platt) **e também no efeito colateral que mais importa para o projeto**
+(menor sub-triagem, maior recall de `urgente`), ao custo de uma queda pequena de
+F1-macro (0,7297 → 0,7235, -0,0062) e mais sobre-triagem (14,4% → 17,1%). Consistente
+com a troca que o próprio §7 descreve como aceitável: sobre-triagem é "cara, mas
+segura"; sub-triagem é o erro perigoso. Isotônica normalmente precisa de mais dados
+que Platt para não sobreajustar (~1.400+ amostras por fatia de calibração aqui,
+folga confortável acima do problema clássico de isotônica com poucos dados).
+
+### Decisão
+
+Isotônica (`CALIBRATION_METHOD = "isotonic"` em `src/models/train.py`) entra na
+produção: `train_and_persist()` agora separa 20% do treino como fatia de calibração
+(`CALIB_HOLDOUT_FRACTION`, estratificada, seed 42) antes de persistir o artefato —
+`model.joblib` passa a ser um `CalibratedClassifierCV` envolvendo a representação
+vencedora de 6.1, não mais o pipeline cru. Ajuste de limiar (caixa 6.4) parte desta
+calibração, não da probabilidade não-calibrada.

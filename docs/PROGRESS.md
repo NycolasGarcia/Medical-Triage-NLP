@@ -886,3 +886,38 @@ combinações.
   retreinado de verdade com o pipeline novo (não só medido em CV) e checado
   manualmente contra 3 laudos de exemplo.
 - Pendente para o fechamento de F6: caixas 6.2 a 6.11.
+
+### F6 — caixa 6.2 (calibração de probabilidade) · execução · 2026-09-15
+
+Protocolo: 5 dobras externas (seed 42) — em cada uma, separa 20% do treino da
+dobra como fatia de calibração (estratificada), ajusta representação vencedora
+de 6.1 + LogReg só no restante, calibra (Platt/isotônica) só na fatia separada
+via `FrozenEstimator` (achado: sklearn removeu `cv="prefit"` na versão em uso,
+1.9 — substituído sem alterar a metodologia pretendida, ver `src/models/calibration.py`).
+
+- Vencedora: **isotônica**. Menor Brier multiclasse (0,3744) e menor ECE da
+  classe `urgente` (0,0184, menos da metade do Platt) da bateria.
+- Achado relevante para §7, não esperado antes de rodar: calibração isolada
+  (sem qualquer ajuste de limiar, que só vem em 6.4) já reduz sub-triagem de
+  12,1% para 9,3% e sobe recall de `urgente` de 0,786 para 0,815 — a
+  calibração por classe muda a ordem relativa de probabilidade entre classes
+  para uma mesma amostra, não é transformação cosmética.
+- Custo aceito: F1-macro cai de 0,7297 para 0,7235 (-0,0062) e sobre-triagem
+  sobe de 14,4% para 17,1% — consistente com §7 (sobre-triagem é o erro
+  "caro, mas seguro").
+- Achado colateral de serialização: `mlflow.sklearn.log_model` também recusou
+  `sklearn.calibration._CalibratedClassifier` via skops (classe interna do
+  sklearn fora da allowlist padrão) — mesma correção de 6.1, allowlist
+  explícita em `skops_trusted_types`, não troca geral de formato.
+- Produção atualizada: `train_and_persist()` agora separa 20% do treino como
+  fatia de calibração antes de persistir — `model.joblib` é um
+  `CalibratedClassifierCV`, não mais o pipeline cru. Conferido manualmente:
+  API carrega e prediz; um exemplo de teste do README precisou ser trocado
+  porque o texto curado antes (checkup de rotina, sintético) virou fronteiriço
+  e passou a predizer `urgente` — trocado por um exemplo real do
+  `data/processed/test.csv` mais estável.
+- Evidência: 3 runs no MLflow (`f6_calib_none/sigmoid/isotonic`), curva de
+  calibração em `docs/evidence/f6_calibration_curve_2026-09-15.png`, tabela e
+  leitura em `docs/EXPERIMENTS.md` (seção F6), 5 testes novos
+  (`test_calibration.py`) — suíte em 57/57 verde, cobertura 68%.
+- Pendente para o fechamento de F6: caixas 6.3 a 6.11.
